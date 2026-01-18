@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pumas Pro Scorer</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+</head>
+<body>
+    <div id="app" class="main-container">
+        <div id="setup-screen" class="card">
+            <h2>Walkerville Pumas Setup</h2>
+            <input type="text" id="p1-name" placeholder="Striker Name" value="Batter 1">
+            <input type="text" id="p2-name" placeholder="Non-Striker Name" value="Batter 2">
+            <input type="text" id="bowler-name" placeholder="Current Bowler" value="Bowler 1">
+            <input type="number" id="match-overs" placeholder="Overs" value="20">
+            <button class="btn-primary" onclick="startGame()">Start Match</button>
+        </div>
+
+        <div id="scoring-screen" class="scoring-grid" style="display:none;">
+            <div class="left-col">
+                <header class="scorecard-header">
+                    <h1 id="total-display">0 / 0</h1>
+                    <div class="header-details">
+                        <p>Overs: <span id="overs-display">0.0</span> / <span id="max-overs-val">20</span></p>
+                        <p>Run Rate: <strong id="rr-display">0.00</strong></p>
+                        <p>Bowler: <strong id="cur-bowler-display">--</strong></p>
+                    </div>
+                </header>
+
+                <div class="batter-stats-container">
+                    <div class="batter-stats">
+                        <div id="striker-box" class="player-card active">
+                            <div class="player-info">
+                                <span id="striker-name" class="name">--</span><span class="striker-marker">*</span>
+                            </div>
+                            <div class="player-score">
+                                <span id="striker-runs">0</span>(<span id="striker-balls">0</span>) 
+                                <small>SR: <span id="striker-sr">0.0</span></small>
+                            </div>
+                        </div>
+                        <div id="non-striker-box" class="player-card">
+                            <div class="player-info"><span id="non-striker-name" class="name">--</span></div>
+                            <div class="player-score">
+                                <span id="non-striker-runs">0</span>(<span id="non-striker-balls">0</span>) 
+                                <small>SR: <span id="non-striker-sr">0.0</span></small>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="btn-swap" onclick="manualSwapStrike()">⇄ Swap Strike (S)</button>
+                </div>
+
+                <div class="controls">
+                    <div class="grid-row">
+                        <button onclick="addBall(0, 'normal')">0</button>
+                        <button onclick="addBall(1, 'normal')">1</button>
+                        <button onclick="addBall(2, 'normal')">2</button>
+                        <button onclick="addBall(3, 'normal')">3</button>
+                    </div>
+                    <div class="grid-row">
+                        <button onclick="addBall(4, 'normal')" class="boundary">4</button>
+                        <button onclick="addBall(6, 'normal')" class="boundary">6</button>
+                        <button onclick="addWicket()" class="wicket">WKT</button>
+                        <button onclick="undo()" class="undo">Undo</button>
+                    </div>
+                    <div class="grid-row extras">
+                        <button onclick="addExtra('wide')">WD</button>
+                        <button onclick="addExtra('noball')">NB</button>
+                        <button onclick="addExtra('byes')">BYE</button>
+                        <button onclick="addExtra('legbyes')">LB</button>
+                    </div>
+                </div>
+
+                <div class="stats-summary card">
+                    <h3>Innings Scorecard</h3>
+                    <div class="stats-tables">
+                        <table id="batter-table">
+                            <thead><tr><th>Batter</th><th>R</th><th>B</th><th>SR</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                        <table id="bowler-table">
+                            <thead><tr><th>Bowler</th><th>O</th><th>R</th><th>W</th><th>Econ</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="history-sidebar">
+                <h3>Ball History</h3>
+                <div id="ball-thread-list" class="scroll-thread"></div>
+            </div>
+        </div>
+        
+        <div id="wicket-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <h3>Wicket Dismissal</h3>
+                <select id="wicket-type">
+                    <option value="Bowled">Bowled</option>
+                    <option value="Caught">Caught</option>
+                    <option value="LBW">LBW</option>
+                    <option value="Run Out">Run Out</option>
+                    <option value="Stumped">Stumped</option>
+                </select>
+                <input type="text" id="fielder-name" placeholder="Fielder Name">
+                <hr>
+                <input type="text" id="next-batsman-name" placeholder="Incoming Batter Name">
+                <button class="btn-primary" onclick="confirmWicket()">Confirm</button>
+            </div>
+        </div>
+
+        <div id="bowler-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <h3>End of Over</h3>
+                <input type="text" id="new-bowler-input" placeholder="Next Bowler Name">
+                <button class="btn-primary" onclick="confirmNewBowler()">Start Over</button>
+            </div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
