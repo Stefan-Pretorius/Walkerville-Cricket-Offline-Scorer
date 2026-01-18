@@ -3,21 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Walkerville Pumas Scorer | U14 Edition</title>
-    <link rel="stylesheet" href="style.css?v=1.5">
+    <title>Walkerville Pumas Scorer | v2.7 Stable</title>
+    <style>
+        :root {
+            --primary: #1a73e8; --secondary: #fbbc04; --wicket: #d93025;
+            --boundary: #1e8e3e; --field: #673ab7; --bg: #f1f3f4;
+            --card-bg: #ffffff; --text: #202124;
+        }
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); margin: 0; padding: 0; }
+        .main-container { max-width: 1200px; margin: 0 auto; padding: 15px; }
+        
+        .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 15px; }
+        .setup-layout { max-width: 450px; margin: 60px auto; text-align: center; }
+        .input-group { display: flex; flex-direction: column; gap: 12px; text-align: left; margin-top: 20px; }
+        .input-group input, .input-group select { padding: 12px; border-radius: 8px; border: 1px solid #ddd; width: 100%; font-size: 1rem; }
+
+        .scoring-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+        .scorecard-header h1 { font-size: 3.5rem; color: var(--primary); text-align: center; margin: 0; }
+        .header-details { display: flex; justify-content: space-around; background: #f8f9fa; padding: 10px; border-radius: 8px; margin-top: 10px; }
+
+        .batter-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 15px 0; }
+        .player-card { background: white; border-radius: 12px; padding: 15px; display: flex; justify-content: space-between; border: 3px solid transparent; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .player-card.active { border-color: var(--primary); background: #e8f0fe; }
+        .balls-left-badge { font-size: 0.75rem; background: #eee; padding: 3px 6px; border-radius: 4px; margin-top: 5px; display: inline-block; font-weight: bold; }
+        .balls-left-badge.alert { background: var(--wicket); color: white; animation: pulse 1.5s infinite; }
+
+        .grid-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
+        button { padding: 15px; border-radius: 8px; border: 1px solid #ddd; font-weight: bold; cursor: pointer; font-size: 1.1rem; transition: 0.2s; }
+        .btn-primary { background: var(--primary); color: white; border: none; width: 100%; }
+        .btn-secondary { background: var(--secondary); border: none; }
+        .btn-danger { background: var(--wicket); color: white; border: none; }
+        .btn-field { background: var(--field); color: white; border: none; }
+        .undo { background: #5f6368; color: white; border: none; }
+
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; z-index: 5000; }
+        .modal-content { background: white; padding: 30px; border-radius: 20px; width: 380px; text-align: center; }
+        .large-modal { width: 90%; max-width: 800px; max-height: 90vh; overflow-y: auto; text-align: left; }
+
+        .field-container { width: 300px; height: 300px; margin: 0 auto; position: relative; }
+        .cricket-field { width: 100%; height: 100%; background: #4CAF50; border-radius: 50%; border: 4px solid white; position: relative; }
+        .pitch { position: absolute; width: 22px; height: 65px; background: #f0e68c; top: 50%; left: 50%; transform: translate(-50%, -50%); border-radius: 2px; }
+        .zone { position: absolute; width: 35px; height: 35px; background: rgba(255,255,255,0.7); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: bold; cursor: pointer; border: 1px solid #333; z-index: 100; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th { background: #f8f9fa; padding: 10px; text-align: left; }
+        td { padding: 10px; border-bottom: 1px solid #eee; }
+        .history-sidebar { height: 90vh; overflow-y: auto; }
+        .history-item { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; font-size: 0.9rem; }
+        
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+    </style>
 </head>
 <body>
     <div id="app" class="main-container">
         
-        <div id="setup-screen" class="card">
-            <h2>Pumas Match Setup</h2>
+        <div id="setup-screen" class="card setup-layout">
+            <h2 style="color:var(--primary)">Pumas Match Setup</h2>
             <div class="input-group">
-                <label>Opening Batters</label>
                 <input type="text" id="p1-name" placeholder="Striker" value="Batter 1">
                 <input type="text" id="p2-name" placeholder="Non-Striker" value="Batter 2">
-                <label>Bowling</label>
-                <input type="text" id="bowler-name" placeholder="Opening Bowler" value="Bowler 1">
-                <label>Retirement Rules (Current Team)</label>
                 <select id="player-count">
                     <option value="8">8 Players (21 balls)</option>
                     <option value="9">9 Players (18 balls)</option>
@@ -26,6 +71,7 @@
                     <option value="12">12 Players (14 balls)</option>
                     <option value="13" selected>13 Players (13 balls)</option>
                 </select>
+                <input type="text" id="bowler-name" placeholder="Opening Bowler" value="Bowler 1">
                 <input type="number" id="match-overs" placeholder="Match Overs" value="20">
             </div>
             <button class="btn-primary" onclick="startGame()">Start Match</button>
@@ -37,8 +83,8 @@
                     <h1 id="total-display">0 / 0</h1>
                     <div class="header-details">
                         <p>Overs: <span id="overs-display">0.0</span></p>
-                        <p>Ball Limit: <strong id="retire-limit-display">--</strong></p>
                         <p>Bowler: <strong id="cur-bowler-display">--</strong></p>
+                        <p>Proj: <strong id="projected-display">--</strong></p>
                     </div>
                 </header>
 
@@ -59,12 +105,12 @@
                     </div>
                 </div>
 
-                <div class="action-row">
-                    <button class="btn-swap" onclick="manualSwapStrike()">⇄ Swap Strike (S)</button>
-                    <button class="btn-retire" onclick="retireBatter()">🏃 Retire Striker</button>
+                <div class="action-row" style="display:flex; gap:10px; margin-bottom:15px;">
+                    <button class="btn-secondary" style="flex:2" onclick="manualSwapStrike()">⇄ Swap Strike (S)</button>
+                    <button class="undo" style="flex:1" onclick="retireBatter()">🏃 Retire</button>
                 </div>
 
-                <div class="controls">
+                <div class="controls card">
                     <div class="grid-row">
                         <button onclick="addBall(0, 'normal')">0</button>
                         <button onclick="addBall(1, 'normal')">1</button>
@@ -72,61 +118,91 @@
                         <button onclick="addBall(3, 'normal')">3</button>
                     </div>
                     <div class="grid-row">
-                        <button onclick="addBall(4, 'normal')" class="boundary">4</button>
-                        <button onclick="addBall(6, 'normal')" class="boundary">6</button>
-                        <button onclick="addWicket()" class="wicket">WKT</button>
-                        <button onclick="undo()" class="undo">Undo (U)</button>
+                        <button onclick="addBall(4, 'normal')" style="background:var(--boundary); color:white">4</button>
+                        <button onclick="addBall(6, 'normal')" style="background:var(--boundary); color:white">6</button>
+                        <button onclick="addWicket()" style="background:var(--wicket); color:white">WKT</button>
+                        <button onclick="undo()" class="undo">Undo</button>
                     </div>
                     <div class="grid-row extras">
                         <button onclick="addExtra('wide')">WD</button>
                         <button onclick="addExtra('noball')">NB</button>
                         <button onclick="addExtra('byes')">BYE</button>
-                        <button onclick="openFieldModal()" class="btn-field">Field</button>
+                        <button onclick="openFieldModal()" class="btn-field">Map</button>
                     </div>
                 </div>
 
                 <div class="stats-summary card">
-                    <h3>Scorecard</h3>
+                    <h3>Batting</h3>
                     <table id="batter-table">
-                        <thead><tr><th>Batter</th><th>R</th><th>B</th><th>Status</th></tr></thead>
+                        <thead><tr><th>Batter</th><th>R</th><th>B</th><th>SR</th></tr></thead>
                         <tbody></tbody>
                     </table>
+                    <h3 style="margin-top:20px">Bowling</h3>
                     <table id="bowler-table">
-                        <thead><tr><th>Bowler</th><th>O</th><th>R</th><th>W</th></tr></thead>
+                        <thead><tr><th>Bowler</th><th>O</th><th>R</th><th>W</th><th>Econ</th></tr></thead>
                         <tbody></tbody>
                     </table>
                 </div>
 
-                <div class="footer-actions">
-                    <button onclick="changeTeamRules()" class="btn-secondary">Change Team Size/Rules</button>
-                    <button onclick="exportToCSV()" class="btn-export">Export CSV</button>
-                    <button onclick="resetMatch()" class="btn-danger">New Game</button>
+                <div class="footer-actions" style="display:flex; gap:10px; margin-top:20px;">
+                    <button onclick="startSecondInnings()" class="btn-secondary" style="flex:1">Next Innings</button>
+                    <button onclick="generateMatchReport()" class="btn-primary" style="flex:1">Final Report</button>
+                    <button onclick="resetMatch()" class="btn-danger" style="flex:1">Wipe All</button>
                 </div>
             </div>
 
             <div class="history-sidebar card">
-                <h3>Ball History</h3>
+                <h3>History (Edit Any Ball)</h3>
                 <div id="ball-thread-list" class="scroll-thread"></div>
             </div>
         </div>
 
-        <div id="rules-modal" class="modal">
-            <div class="modal-content">
-                <h3>Update Innings Rules</h3>
-                <label>Players in this Team:</label>
-                <select id="update-player-count">
-                    <option value="8">8 Players (21 balls)</option>
-                    <option value="9">9 Players (18 balls)</option>
-                    <option value="10">10 Players (16 balls)</option>
-                    <option value="11">11 Players (15 balls)</option>
-                    <option value="12">12 Players (14 balls)</option>
-                    <option value="13">13 Players (13 balls)</option>
-                </select>
-                <button class="btn-primary" onclick="applyRuleChange()">Apply Changes</button>
-            </div>
-        </div>
+        <div id="field-modal" class="modal"><div class="modal-content">
+            <h3>Select Hit Zone</h3>
+            <div class="field-container"><div class="cricket-field">
+                <div class="zone" onclick="selectZone('Third Man')" style="top:10%; left:20%;">TM</div>
+                <div class="zone" onclick="selectZone('Fine Leg')" style="top:10%; left:65%;">FL</div>
+                <div class="zone" onclick="selectZone('Point')" style="top:40%; left:5%;">P</div>
+                <div class="zone" onclick="selectZone('Cover')" style="top:65%; left:15%;">C</div>
+                <div class="zone" onclick="selectZone('Mid Off')" style="top:85%; left:35%;">MO</div>
+                <div class="zone" onclick="selectZone('Mid On')" style="top:85%; left:60%;">MN</div>
+                <div class="zone" onclick="selectZone('Mid Wicket')" style="top:65%; left:80%;">MW</div>
+                <div class="zone" onclick="selectZone('Square Leg')" style="top:40%; left:88%;">SL</div>
+                <div class="pitch"></div>
+            </div></div>
+            <button class="undo" onclick="closeModals()" style="width:100%; margin-top:15px;">Skip</button>
+        </div></div>
 
-        </div>
+        <div id="bowler-modal" class="modal"><div class="modal-content">
+            <h3>New Over Started</h3>
+            <p>Select Previous Bowler:</p>
+            <div id="quick-bowler-list" class="grid-row" style="grid-template-columns: repeat(3, 1fr); margin-bottom:15px;"></div>
+            <hr>
+            <input type="text" id="new-bowler-input" placeholder="Next Bowler Name">
+            <button class="btn-primary" onclick="confirmNewBowler()">Confirm & Continue</button>
+        </div></div>
+
+        <div id="wicket-modal" class="modal"><div class="modal-content">
+            <h3>Wicket Details</h3>
+            <select id="wicket-type" style="width:100%; padding:10px; margin-bottom:10px; border-radius:8px">
+                <option value="Bowled">Bowled</option>
+                <option value="Caught">Caught</option>
+                <option value="LBW">LBW</option>
+                <option value="Run Out">Run Out</option>
+                <option value="Stumped">Stumped</option>
+            </select>
+            <input type="text" id="fielder-name" placeholder="Fielder Name (Optional)">
+            <input type="text" id="next-batsman-name" placeholder="Incoming Batter (Required)">
+            <button class="btn-primary" onclick="confirmWicket()">Record Wicket</button>
+            <button class="undo" onclick="closeModals()" style="width:100%; margin-top:10px;">Cancel</button>
+        </div></div>
+
+        <div id="report-modal" class="modal"><div class="modal-content large-modal">
+            <div id="report-body"></div>
+            <button class="btn-primary" onclick="closeModals()">Close Report</button>
+        </div></div>
+
+    </div>
     <script src="app.js"></script>
 </body>
 </html>
