@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pumas Scorer Pro v3.25</title>
+    <title>Pumas Scorer Pro v3.27</title>
     <style>
         :root {
             --primary: #1a73e8; --secondary: #fbbc04; --wicket: #d93025;
@@ -380,7 +380,8 @@
         }
 
         function recalc() {
-            if(document.getElementById('setup-screen').style.display !== 'none') return;
+            // REMOVED BRITTLE SAFETY LOCK that caused crashes
+            // Instead, verify DOM elements exist before updating them (in updateUI)
 
             live.runs = 0; live.wkts = 0; live.ov = 0; live.balls = 0;
             live.batters = {}; live.bowlers = {};
@@ -427,7 +428,6 @@
 
                 live.runs += h.runs;
                 
-                // Track FOW
                 if (h.wkt) {
                     live.wkts++;
                     let outName = "";
@@ -444,10 +444,8 @@
                 let isLast = (live.ov === match.overs - 1);
 
                 if (live.batters[h.batter]) {
-                    // Batter Stats: Count all balls (Junior Rule)
-                    if (!isLast) live.batters[h.batter].balls++;
-                    else if (h.legal) live.batters[h.batter].balls++;
-
+                    // Batter Stats: Always count balls faced (Junior Rule)
+                    live.batters[h.batter].balls++; 
                     if (['normal','wicket'].includes(h.type)) {
                         live.batters[h.batter].runs += h.runs;
                     }
@@ -459,12 +457,7 @@
                     if (h.wkt) live.bowlers[h.bowler].wkts++;
                     
                     // Bowler Stats: Count all physical balls
-                    if (!isLast) live.bowlers[h.bowler].balls++;
-                    else if(h.legal) live.bowlers[h.bowler].balls++; 
-                    // User Request: Last over extra only adds runs, not balls to stats. 
-                    // Wait, previous request said "extra 2 balls show them so it always ends up to be full number".
-                    // I'll stick to: Count physical balls in last over to match "8 balls max" logic
-                    else live.bowlers[h.bowler].balls++; 
+                    live.bowlers[h.bowler].balls++;
                 }
 
                 phys++;
@@ -490,8 +483,9 @@
 
             live.striker = s; live.ns = ns;
             
-            // FOW Display
-            document.getElementById('fow-ui').innerHTML = fow.map(f => `<div class="fow-item">${f}</div>`).join('');
+            // Safe Update FOW
+            const fowUI = document.getElementById('fow-ui');
+            if(fowUI) fowUI.innerHTML = fow.map(f => `<div class="fow-item">${f}</div>`).join('');
             
             updateUI();
             
@@ -551,15 +545,14 @@
 
                     if(stats.batters[h.batter]) {
                         if(stats.batters[h.batter].status === 'DNB') stats.batters[h.batter].status = 'Active';
-                        if (!isLast) stats.batters[h.batter].balls++;
-                        else if(h.legal) stats.batters[h.batter].balls++;
+                        stats.batters[h.batter].balls++; // Count all
                         if(['normal','wicket'].includes(h.type)) stats.batters[h.batter].runs += h.runs;
                     }
                     
                     if(stats.bowlers[h.bowler]) {
                         stats.bowlers[h.bowler].runs += h.runs;
                         if(h.wkt) stats.bowlers[h.bowler].wkts++;
-                        stats.bowlers[h.bowler].balls++;
+                        stats.bowlers[h.bowler].balls++; // Count all
                     }
                     phys++;
                     let end = false;
@@ -567,10 +560,12 @@
                     else { if(h.legal) stats.balls++; if(stats.balls>=6 || phys>=8) end=true; }
                     
                     if(end) { 
+                        // Fix for Wickets on graphs: Push current state explicitly
                         stats.runRateData.push({ over: stats.ov + 1, runs: overRuns, cum: cumRuns, wkts: stats.fow.filter(f => f.ov === stats.ov).length });
                         stats.ov++; stats.balls=0; phys=0; overRuns = 0; 
                     }
                 });
+                // Capture partial final over
                 if(stats.balls > 0 || phys > 0) stats.runRateData.push({ over: stats.ov + 1, runs: overRuns, cum: cumRuns, wkts: 0 });
                 return stats;
             }
@@ -587,7 +582,7 @@
             // GRAPH GENERATION
             let maxOver = Math.max(i1.runRateData.length, i2.runRateData.length);
             let maxRunsInOver = 0;
-            let maxCumScore = Math.max(i1.score, i2.score);
+            let maxCumScore = Math.max(i1.score, i2.score, 10);
             
             let manhattanHTML = `<div class="bar-chart">`;
             for(let o=0; o<maxOver; o++) {
@@ -668,7 +663,6 @@
             document.getElementById('report-modal').style.display = 'flex';
         }
 
-        // ... (Standard Helpers Below) ...
         function openExtrasModal(type) {
             document.getElementById('extras-type-val').value = type;
             const title = type === 'wide' ? "Wide" : type === 'noball' ? "No Ball" : "Byes";
@@ -692,6 +686,7 @@
         function confirmExtra(runs) {
             const type = document.getElementById('extras-type-val').value;
             let total = runs;
+            // Wides, NB, Byes ALL add 1 to the run count automatically (Penalty/Extra)
             if (type === 'wide') total += 1; 
             if (type === 'noball') total += 1; 
             if (type === 'byes') total += 1;
@@ -849,13 +844,15 @@
         }
         function updateUI() {
             document.getElementById('total-display').innerText = live.runs + " / " + live.wkts;
-            // Clean Last Over Display Logic: If balls > 6 (e.g., 20.8), show Max Overs (e.g. 20.0)
+            
+            // CLEAN LAST OVER DISPLAY LOGIC
             let dispOv = live.ov;
             let dispBalls = live.balls;
             if(live.ov >= match.overs && live.balls === 0) {
                 dispOv = match.overs; dispBalls = 0;
             }
             document.getElementById('overs-display').innerText = dispOv + "." + dispBalls;
+            
             document.getElementById('cur-bowler-display').innerText = live.bowler;
             document.getElementById('striker-name').innerText = live.striker;
             document.getElementById('ns-name').innerText = live.ns;
