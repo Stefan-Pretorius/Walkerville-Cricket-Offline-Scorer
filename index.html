@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pumas Scorer Pro v3.27</title>
+    <title>Pumas Scorer Pro v3.29</title>
     <style>
         :root {
             --primary: #1a73e8; --secondary: #fbbc04; --wicket: #d93025;
@@ -225,7 +225,6 @@
 
         <div id="team-manager-modal" class="modal"><div class="modal-content">
             <h3>Manage Teams</h3>
-            <p style="font-size:0.8rem">Edit names below to rename players in history.</p>
             <div class="team-grid" style="margin-bottom:10px;">
                 <div><label>Team 1</label><textarea id="edit-team1-list"></textarea></div>
                 <div><label>Team 2</label><textarea id="edit-team2-list"></textarea></div>
@@ -366,7 +365,7 @@
             if (live.gameOver) return alert("Match Ended. Please view report.");
             if (live.ov >= match.overs) { alert("Innings Complete. Please Swap Innings."); return; }
             
-            // BYE is now EXTRA (Illegal) for last over calculation purposes (Standard cricket: Legal, Junior: Illegal/Rebowl)
+            // BYE is now EXTRA (Illegal) for last over calculation purposes
             let isLegal = ['normal','wicket'].includes(type);
             
             live.history.push({ 
@@ -380,8 +379,7 @@
         }
 
         function recalc() {
-            // REMOVED BRITTLE SAFETY LOCK that caused crashes
-            // Instead, verify DOM elements exist before updating them (in updateUI)
+            if(document.getElementById('setup-screen').style.display !== 'none') return;
 
             live.runs = 0; live.wkts = 0; live.ov = 0; live.balls = 0;
             live.batters = {}; live.bowlers = {};
@@ -389,6 +387,7 @@
             const battingTeam = match.innings === 1 ? match.t1 : match.t2;
             const bowlingTeam = match.innings === 1 ? match.t2 : match.t1;
             
+            // MISSING PLAYER FIX: Always re-init full list
             battingTeam.forEach((n, i) => {
                 live.batters[n] = { name: n, runs: 0, balls: 0, 4:0, status: 'Yet to bat', stint: 1, returnLimit: null, order: i };
             });
@@ -428,6 +427,7 @@
 
                 live.runs += h.runs;
                 
+                // Zombie Batter Fix: Handle Wickets strictly
                 if (h.wkt) {
                     live.wkts++;
                     let outName = "";
@@ -443,6 +443,7 @@
 
                 let isLast = (live.ov === match.overs - 1);
 
+                // Stats: Apply stats to current batter/bowler (before potential swap)
                 if (live.batters[h.batter]) {
                     // Batter Stats: Always count balls faced (Junior Rule)
                     live.batters[h.batter].balls++; 
@@ -483,7 +484,6 @@
 
             live.striker = s; live.ns = ns;
             
-            // Safe Update FOW
             const fowUI = document.getElementById('fow-ui');
             if(fowUI) fowUI.innerHTML = fow.map(f => `<div class="fow-item">${f}</div>`).join('');
             
@@ -545,14 +545,14 @@
 
                     if(stats.batters[h.batter]) {
                         if(stats.batters[h.batter].status === 'DNB') stats.batters[h.batter].status = 'Active';
-                        stats.batters[h.batter].balls++; // Count all
+                        stats.batters[h.batter].balls++; 
                         if(['normal','wicket'].includes(h.type)) stats.batters[h.batter].runs += h.runs;
                     }
                     
                     if(stats.bowlers[h.bowler]) {
                         stats.bowlers[h.bowler].runs += h.runs;
                         if(h.wkt) stats.bowlers[h.bowler].wkts++;
-                        stats.bowlers[h.bowler].balls++; // Count all
+                        stats.bowlers[h.bowler].balls++; 
                     }
                     phys++;
                     let end = false;
@@ -560,12 +560,10 @@
                     else { if(h.legal) stats.balls++; if(stats.balls>=6 || phys>=8) end=true; }
                     
                     if(end) { 
-                        // Fix for Wickets on graphs: Push current state explicitly
                         stats.runRateData.push({ over: stats.ov + 1, runs: overRuns, cum: cumRuns, wkts: stats.fow.filter(f => f.ov === stats.ov).length });
                         stats.ov++; stats.balls=0; phys=0; overRuns = 0; 
                     }
                 });
-                // Capture partial final over
                 if(stats.balls > 0 || phys > 0) stats.runRateData.push({ over: stats.ov + 1, runs: overRuns, cum: cumRuns, wkts: 0 });
                 return stats;
             }
@@ -579,7 +577,7 @@
             else if (s2 > s1) resText = `${match.t2[0]}'s Team won by ${Math.max(1, (match.t2.length - 1) - i2.wkts)} Wickets`; 
             else resText = "Match Tied";
 
-            // GRAPH GENERATION
+            // GRAPH GENERATION (Safe)
             let maxOver = Math.max(i1.runRateData.length, i2.runRateData.length);
             let maxRunsInOver = 0;
             let maxCumScore = Math.max(i1.score, i2.score, 10);
@@ -686,7 +684,6 @@
         function confirmExtra(runs) {
             const type = document.getElementById('extras-type-val').value;
             let total = runs;
-            // Wides, NB, Byes ALL add 1 to the run count automatically (Penalty/Extra)
             if (type === 'wide') total += 1; 
             if (type === 'noball') total += 1; 
             if (type === 'byes') total += 1;
@@ -844,15 +841,13 @@
         }
         function updateUI() {
             document.getElementById('total-display').innerText = live.runs + " / " + live.wkts;
-            
-            // CLEAN LAST OVER DISPLAY LOGIC
+            // Clean Last Over Display Logic
             let dispOv = live.ov;
             let dispBalls = live.balls;
             if(live.ov >= match.overs && live.balls === 0) {
                 dispOv = match.overs; dispBalls = 0;
             }
             document.getElementById('overs-display').innerText = dispOv + "." + dispBalls;
-            
             document.getElementById('cur-bowler-display').innerText = live.bowler;
             document.getElementById('striker-name').innerText = live.striker;
             document.getElementById('ns-name').innerText = live.ns;
@@ -885,59 +880,19 @@
                 return `<div class="history-item" onclick="openEditModal(${live.history.length-1-i})">${desc} ${h.zone ? '['+h.zone.substring(0,3)+']' : ''}</div>`;
             }).join('');
         }
-        function updatePlayerCard(id, p) {
-            if (!p) return;
-            document.getElementById(id + '-runs').innerText = p.runs;
-            document.getElementById(id + '-balls').innerText = p.balls;
-            const b = document.getElementById(id + '-badge');
-            if (p.stint === 2) {
-                const left = p.returnLimit - live.ov;
-                b.innerText = `Return: ${left}ov`; b.className = left <= 0 ? "balls-left-badge alert" : "balls-left-badge";
-            } else {
-                const left = live.retireLimit - p.balls;
-                b.innerText = `Limit: ${left}`; b.className = left <= 0 ? "balls-left-badge alert" : "balls-left-badge";
-            }
-        }
+        function updatePlayerCard(id, p) { if (!p) return; document.getElementById(id + '-runs').innerText = p.runs; document.getElementById(id + '-balls').innerText = p.balls; const b = document.getElementById(id + '-badge'); if (p.stint === 2) { const left = p.returnLimit - live.ov; b.innerText = `Return: ${left}ov`; b.className = left <= 0 ? "balls-left-badge alert" : "balls-left-badge"; } else { const left = live.retireLimit - p.balls; b.innerText = `Limit: ${left}`; b.className = left <= 0 ? "balls-left-badge alert" : "balls-left-badge"; } }
         function manualSwapStrike() { live.history.push({ event: 'swap' }); closeModals(); recalc(); }
         function undo() { live.history.pop(); recalc(); }
         function closeModals() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
         function selectZone(z) { for(let i=live.history.length-1; i>=0; i--) { if(live.history[i].event === 'ball') { live.history[i].zone = z; break; } } closeModals(); recalc(); }
         function openFieldModal() { document.getElementById('field-modal').style.display = 'flex'; }
-        function swapInnings() {
-            match.target = live.runs + 1; match.innings = 2;
-            document.getElementById('innings-notice').style.display = 'block';
-            document.getElementById('innings-notice').innerText = "Target: " + match.target;
-            const oldB = document.getElementById('bat-list').value;
-            document.getElementById('bat-list').value = document.getElementById('bowl-list').value;
-            document.getElementById('bowl-list').value = oldB;
-            document.getElementById('scoring-screen').style.display = 'none';
-            document.getElementById('setup-screen').style.display = 'block';
-        }
-        function exportState() {
-            const blob = new Blob([JSON.stringify({match, live})], {type: 'application/json'});
-            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'match.json'; a.click();
-        }
-        function importState(e) {
-            const reader = new FileReader();
-            reader.onload = (ev) => { const d = JSON.parse(ev.target.result); match = d.match; live = d.live; recalc(); document.getElementById('setup-screen').style.display='none'; document.getElementById('scoring-screen').style.display='grid'; };
-            reader.readAsText(e.target.files[0]);
-        }
+        function swapInnings() { match.target = live.runs + 1; match.innings = 2; document.getElementById('innings-notice').style.display = 'block'; document.getElementById('innings-notice').innerText = "Target: " + match.target; const oldB = document.getElementById('bat-list').value; document.getElementById('bat-list').value = document.getElementById('bowl-list').value; document.getElementById('bowl-list').value = oldB; document.getElementById('scoring-screen').style.display = 'none'; document.getElementById('setup-screen').style.display = 'block'; }
+        function exportState() { const blob = new Blob([JSON.stringify({match, live})], {type: 'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'match.json'; a.click(); }
+        function importState(e) { const reader = new FileReader(); reader.onload = (ev) => { const d = JSON.parse(ev.target.result); match = d.match; live = d.live; recalc(); document.getElementById('setup-screen').style.display='none'; document.getElementById('scoring-screen').style.display='grid'; }; reader.readAsText(e.target.files[0]); }
         function resetMatch() { if (confirm("Wipe?")) { localStorage.removeItem('pumas_save'); location.reload(); } }
         function saveMatch() { localStorage.setItem('pumas_save', JSON.stringify({ match, live })); alert("Match Saved Successfully!"); }
-        function saveToMemory() {
-            localStorage.setItem('pumas_save', JSON.stringify({ match, live }));
-            const ind = document.getElementById('save-indicator');
-            ind.style.opacity = 1; setTimeout(() => ind.style.opacity = 0, 2000);
-        }
-        window.onload = () => {
-            const s = localStorage.getItem('pumas_save');
-            if (s && confirm("Resume Match?")) {
-                const d = JSON.parse(s); match = d.match; live = d.live;
-                document.getElementById('setup-screen').style.display = 'none';
-                document.getElementById('scoring-screen').style.display = 'grid';
-                recalc();
-            }
-        };
+        function saveToMemory() { localStorage.setItem('pumas_save', JSON.stringify({ match, live })); const ind = document.getElementById('save-indicator'); ind.style.opacity = 1; setTimeout(() => ind.style.opacity = 0, 2000); }
+        window.onload = () => { const s = localStorage.getItem('pumas_save'); if (s && confirm("Resume Match?")) { const d = JSON.parse(s); match = d.match; live = d.live; document.getElementById('setup-screen').style.display = 'none'; document.getElementById('scoring-screen').style.display = 'grid'; recalc(); } };
     </script>
 </body>
 </html>
