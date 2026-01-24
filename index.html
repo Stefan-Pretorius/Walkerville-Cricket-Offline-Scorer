@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pumas Scorer Pro v3.12</title>
+    <title>Pumas Scorer Pro v3.14</title>
     <style>
         :root {
             --primary: #1a73e8; --secondary: #fbbc04; --wicket: #d93025;
@@ -44,7 +44,8 @@
         .btn-bye { background: var(--bye); color: white; border: none; }
 
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; z-index: 5000; }
-        .modal-content { background: white; padding: 30px; border-radius: 20px; width: 450px; text-align: center; max-height: 95vh; overflow-y: auto; }
+        .modal-content { background: white; padding: 30px; border-radius: 20px; width: 500px; text-align: center; max-height: 95vh; overflow-y: auto; }
+        .large-modal { width: 90%; max-width: 800px; text-align: left; }
         .modal select, .modal input { width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #ccc; font-size: 1rem; }
 
         .field-container { width: 280px; height: 280px; margin: 0 auto; position: relative; }
@@ -68,6 +69,15 @@
         .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
         input:checked + .slider { background-color: var(--primary); }
         input:checked + .slider:before { transform: translateX(16px); }
+
+        @media print {
+            body * { visibility: hidden; }
+            #report-modal, #report-modal * { visibility: visible; }
+            #report-modal { position: absolute; left: 0; top: 0; width: 100%; height: auto; background: white; color: black; padding: 0; box-shadow: none; }
+            #report-content { width: 100%; }
+            .no-print { display: none !important; }
+            .modal-content { width: 100%; max-width: 100%; box-shadow: none; }
+        }
 
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
     </style>
@@ -158,14 +168,15 @@
 
                 <div class="card">
                     <table id="batter-table"><thead><tr><th>Name</th><th>R</th><th>B</th><th>4s</th><th>Status</th></tr></thead><tbody></tbody></table>
-                    <button onclick="openNameManager()" class="btn-secondary" style="width:100%; margin-top:10px; font-size:0.8rem; padding:8px;">✏️ Manage Team Names</button>
+                    <button onclick="openTeamManager()" class="btn-secondary" style="width:100%; margin-top:10px; font-size:0.8rem; padding:8px;">✏️ Manage Team Names</button>
                     <table id="bowler-table" style="margin-top:20px;"><thead><tr><th>Bowler</th><th>O</th><th>R</th><th>W</th><th>Econ</th></tr></thead><tbody></tbody></table>
                 </div>
 
                 <div style="display:flex; gap:10px;">
-                    <button onclick="swapInnings()" class="btn-secondary" style="flex:1">Swap Innings</button>
+                    <button onclick="swapInnings()" class="btn-secondary" style="flex:1">Swap</button>
+                    <button onclick="generateReport()" class="btn-primary" style="flex:1">📊 Report</button>
+                    <button onclick="saveMatch()" class="btn-save" style="flex:1">Save</button>
                     <button onclick="exportState()" style="flex:1">Export</button>
-                    <button onclick="saveMatch()" class="btn-save" style="flex:1">Save Match</button>
                     <button onclick="resetMatch()" class="btn-danger" style="flex:1">Reset</button>
                 </div>
             </div>
@@ -175,11 +186,24 @@
             </div>
         </div>
 
-        <div id="name-manager-modal" class="modal"><div class="modal-content">
-            <h3>Manage Names</h3>
-            <p style="font-size:0.85rem; color:#666">Renaming a player here updates all their history.</p>
-            <div id="name-list-container" style="text-align:left;"></div>
-            <button class="btn-secondary" onclick="closeModals()" style="width:100%; margin-top:15px;">Close</button>
+        <div id="report-modal" class="modal"><div class="modal-content large-modal">
+            <h2 id="report-title">Match Report</h2>
+            <div id="report-content"></div>
+            <div class="no-print" style="margin-top:20px; display:flex; gap:10px;">
+                <button class="btn-primary" onclick="window.print()" style="flex:1">Print / Save PDF</button>
+                <button class="btn-secondary" onclick="closeModals()" style="flex:1">Close</button>
+            </div>
+        </div></div>
+
+        <div id="team-manager-modal" class="modal"><div class="modal-content">
+            <h3>Manage Teams</h3>
+            <p style="font-size:0.8rem">Edit names below to rename players in history.</p>
+            <div class="team-grid" style="margin-bottom:10px;">
+                <div><label>Team 1</label><textarea id="edit-team1-list"></textarea></div>
+                <div><label>Team 2</label><textarea id="edit-team2-list"></textarea></div>
+            </div>
+            <button class="btn-primary" onclick="confirmTeamEdit()" style="width:100%">Save Changes</button>
+            <button class="btn-secondary" onclick="closeModals()" style="width:100%; margin-top:10px;">Cancel</button>
         </div></div>
 
         <div id="bowler-modal" class="modal"><div class="modal-content">
@@ -215,9 +239,9 @@
             <p>Select <strong>Total Runs</strong> (including the extra):</p>
             <div class="grid-row">
                 <button onclick="confirmExtra(0)" id="btn-ex-0">Standard</button>
-                <button onclick="confirmExtra(1)">+1 Run</button>
-                <button onclick="confirmExtra(2)">+2 Runs</button>
-                <button onclick="confirmExtra(4)">Boundary</button>
+                <button onclick="confirmExtra(1)" id="btn-ex-1">+1 Run</button>
+                <button onclick="confirmExtra(2)" id="btn-ex-2">+2 Runs</button>
+                <button onclick="confirmExtra(4)" id="btn-ex-4">Boundary</button>
             </div>
             <input type="hidden" id="extras-type-val">
             <button class="btn-secondary" onclick="closeModals()" style="width:100%; margin-top:15px;">Cancel</button>
@@ -318,7 +342,13 @@
         // SCORING
         function handleBall(r, type, wkt = null) {
             if (live.ov >= match.overs) { alert("Innings Complete. Please Swap Innings."); return; }
-            live.history.push({ event: 'ball', runs: r, type, batter: live.striker, bowler: live.bowler, legal: (['normal','wicket','byes'].includes(type)), wkt });
+            // Add current innings to history event to track team context
+            live.history.push({ 
+                event: 'ball', 
+                innings: match.innings,
+                runs: r, type, batter: live.striker, bowler: live.bowler, 
+                legal: (['normal','wicket','byes'].includes(type)), wkt 
+            });
             recalc();
             const mapOn = document.getElementById('map-toggle').checked;
             if (mapOn && r > 0 && ['normal','wicket'].includes(type)) openFieldModal();
@@ -326,21 +356,15 @@
 
         function recalc() {
             live.runs = 0; live.wkts = 0; live.ov = 0; live.balls = 0;
-            // Reset Batters but PRESERVE STINT info which is rebuilt from history
+            // Reset
             Object.values(live.batters).forEach(b => { 
-                b.runs = 0; b.balls = 0; b[4] = 0; 
-                // Reset to initial state
-                b.stint = 1; b.returnLimit = null; 
+                b.runs = 0; b.balls = 0; b[4] = 0; b.stint = 1; b.returnLimit = null; 
             });
-            // Re-assign statuses based on initial match array? No, simpler to reset all then replay.
-            // Actually, safe way: Set all to 'Yet to bat', then Openers to 'Active', then replay.
             const baseList = match.innings === 1 ? match.t1 : match.t2;
             Object.values(live.batters).forEach(b => b.status = 'Yet to bat');
-            
             let s = baseList[0], ns = baseList[1];
-            live.batters[s].status = 'Active';
-            live.batters[ns].status = 'Active';
-
+            if(live.batters[s]) live.batters[s].status = 'Active';
+            if(live.batters[ns]) live.batters[ns].status = 'Active';
             Object.values(live.bowlers).forEach(b => { b.runs = 0; b.wkts = 0; b.balls = 0; });
 
             let phys = 0, lastBowler = "", overEnded = false;
@@ -354,11 +378,8 @@
                     return; 
                 }
                 if (h.event === 'new_bat') { 
-                    // New Batter Logic
-                    // If returning from retirement, update stint
                     if (live.batters[h.name].status === 'Retired') {
                         live.batters[h.name].stint++;
-                        // Rule: Current Over + 4 Full Overs = ov + 5
                         live.batters[h.name].returnLimit = (live.batters[h.name].stint === 2) ? live.ov + 5 : null;
                     }
                     live.batters[h.name].status = 'Active';
@@ -370,7 +391,7 @@
                 if (h.wkt) {
                     live.wkts++;
                     if(h.wkt.outPlayer) live.batters[h.wkt.outPlayer].status = 'Out';
-                    else live.batters[s].status = 'Out'; // Fallback
+                    else live.batters[s].status = 'Out';
                 }
 
                 if (live.batters[h.batter]) {
@@ -425,12 +446,16 @@
             document.getElementById('extras-type-val').value = type;
             const title = type === 'wide' ? "Wide" : type === 'noball' ? "No Ball" : "Byes";
             document.getElementById('extras-title').innerText = title;
-            document.getElementById('btn-ex-0').innerText = type === 'wide' ? "Standard (+1)" : "Standard (+0)";
+            const btn0 = document.getElementById('btn-ex-0');
+            btn0.innerText = type === 'wide' ? "Standard (+1)" : "Standard (+0)";
             
-            // Set Color Classes for Title
+            const color = type === 'wide' ? 'var(--wide)' : type === 'noball' ? 'var(--nb)' : 'var(--bye)';
             const h4 = document.getElementById('extras-title');
-            h4.style.color = type === 'wide' ? 'var(--wide)' : type === 'noball' ? 'var(--nb)' : 'var(--bye)';
-            
+            h4.style.color = color;
+            ['btn-ex-0', 'btn-ex-1', 'btn-ex-2', 'btn-ex-4'].forEach(id => {
+                document.getElementById(id).style.backgroundColor = color;
+                document.getElementById(id).style.color = 'white';
+            });
             document.getElementById('extras-modal').style.display = 'flex';
         }
         function confirmExtra(runs) {
@@ -442,55 +467,97 @@
             closeModals();
         }
 
-        // NAME MANAGER
-        function openNameManager() {
-            const list = match.innings === 1 ? match.t1 : match.t2;
-            const container = document.getElementById('name-list-container');
-            container.innerHTML = list.map((n, i) => `
-                <div style="display:flex; gap:10px; margin-bottom:10px;">
-                    <input type="text" value="${n}" id="edit-name-${i}" style="margin:0; flex:1;">
-                    <button class="btn-primary" style="padding:8px;" onclick="saveNameChange('${n}', ${i})">Save</button>
-                </div>
-            `).join('');
-            document.getElementById('name-manager-modal').style.display = 'flex';
+        // TEAM MANAGER (SAFE RENAMING)
+        function openTeamManager() {
+            document.getElementById('edit-team1-list').value = match.t1.join('\n');
+            document.getElementById('edit-team2-list').value = match.t2.join('\n');
+            document.getElementById('team-manager-modal').style.display = 'flex';
         }
 
-        function saveNameChange(oldName, idx) {
-            const newName = document.getElementById(`edit-name-${idx}`).value.trim();
-            if (!newName || newName === oldName) return;
-
-            // Update Match Array
-            if (match.innings === 1) match.t1[idx] = newName; else match.t2[idx] = newName;
+        function confirmTeamEdit() {
+            const newT1 = document.getElementById('edit-team1-list').value.split('\n').map(n => n.trim()).filter(n => n);
+            const newT2 = document.getElementById('edit-team2-list').value.split('\n').map(n => n.trim()).filter(n => n);
             
-            // Update Batters Object
+            const oldT1 = match.t1;
+            for(let i=0; i<Math.max(oldT1.length, newT1.length); i++) {
+                if(oldT1[i] && newT1[i] && oldT1[i] !== newT1[i]) renamePlayer(oldT1[i], newT1[i], 1);
+            }
+            const oldT2 = match.t2;
+            for(let i=0; i<Math.max(oldT2.length, newT2.length); i++) {
+                if(oldT2[i] && newT2[i] && oldT2[i] !== newT2[i]) renamePlayer(oldT2[i], newT2[i], 2);
+            }
+            match.t1 = newT1; match.t2 = newT2;
+            closeModals(); recalc();
+        }
+
+        function renamePlayer(oldName, newName, teamId) {
+            // Logic: 
+            // If teamId is 1: Rename Batters in Inn 1, Bowlers in Inn 2
+            // If teamId is 2: Rename Bowlers in Inn 1, Batters in Inn 2
+            
+            // 1. Rename Object Keys (Safe copy)
             if (live.batters[oldName]) {
                 live.batters[newName] = live.batters[oldName];
                 live.batters[newName].name = newName;
                 delete live.batters[oldName];
             }
-            // Update Bowlers Object
             if (live.bowlers[oldName]) {
                 live.bowlers[newName] = live.bowlers[oldName];
                 live.bowlers[newName].name = newName;
                 delete live.bowlers[oldName];
             }
-            // Update History
+
+            // 2. Rename in History based on Role/Innings Context
             live.history.forEach(h => {
-                if (h.batter === oldName) h.batter = newName;
-                if (h.bowler === oldName) h.bowler = newName;
-                if (h.name === oldName) h.name = newName;
-                if (h.wkt && h.wkt.outPlayer === oldName) h.wkt.outPlayer = newName;
-                if (h.wkt && h.wkt.fielder === oldName) h.wkt.fielder = newName;
+                const isInn1 = (h.innings === 1) || (!h.innings && match.innings === 1); // fallback
+                const isInn2 = (h.innings === 2) || (!h.innings && match.innings === 2);
+
+                if (teamId === 1) {
+                    if (isInn1 && h.batter === oldName) h.batter = newName;
+                    if (isInn2 && h.bowler === oldName) h.bowler = newName;
+                    if (isInn1 && h.name === oldName) h.name = newName; // Batter switch event
+                } else {
+                    if (isInn1 && h.bowler === oldName) h.bowler = newName;
+                    if (isInn2 && h.batter === oldName) h.batter = newName;
+                    if (isInn2 && h.name === oldName) h.name = newName;
+                }
+                
+                // Wickets (Fielder/Out Player)
+                if (h.wkt) {
+                    if (h.wkt.outPlayer === oldName) h.wkt.outPlayer = newName;
+                    if (h.wkt.fielder === oldName) h.wkt.fielder = newName; 
+                }
             });
 
-            // Update Live State pointers
+            // 3. Rename Pointers
             if (live.striker === oldName) live.striker = newName;
             if (live.ns === oldName) live.ns = newName;
             if (live.bowler === oldName) live.bowler = newName;
+        }
 
-            alert(`Renamed ${oldName} to ${newName}`);
-            closeModals();
-            recalc();
+        // GENERATE REPORT
+        function generateReport() {
+            let html = `<h3>${match.innings === 1 ? '1st' : '2nd'} Innings Report</h3>
+                        <p><strong>Score:</strong> ${live.runs}/${live.wkts} (${live.ov}.${live.balls})</p>
+                        <h4>Batting</h4>
+                        <table><thead><tr><th>Name</th><th>Runs</th><th>Balls</th><th>Status</th></tr></thead><tbody>
+                        ${Object.values(live.batters).map(b => `<tr><td>${b.name}</td><td>${b.runs}</td><td>${b.balls}</td><td>${b.status}</td></tr>`).join('')}
+                        </tbody></table>
+                        <h4>Bowling</h4>
+                        <table><thead><tr><th>Name</th><th>Overs</th><th>Runs</th><th>Wkts</th></tr></thead><tbody>
+                        ${Object.values(live.bowlers).map(b => `<tr><td>${b.name}</td><td>${Math.floor(b.balls/6)}.${b.balls%6}</td><td>${b.runs}</td><td>${b.wkts}</td></tr>`).join('')}
+                        </tbody></table>
+                        <h4>Ball Log</h4>
+                        <div style="font-size:0.8rem; text-align:left;">`;
+            
+            live.history.forEach((h, i) => {
+                if (h.event === 'ball') {
+                    html += `<div style="border-bottom:1px solid #eee; padding:2px;">${i+1}. ${h.bowler} to ${h.batter}: <strong>${h.runs} ${h.type}</strong> ${h.wkt?'(WKT)':''}</div>`;
+                }
+            });
+            html += `</div>`;
+            document.getElementById('report-content').innerHTML = html;
+            document.getElementById('report-modal').style.display = 'flex';
         }
 
         // EDIT HISTORY
@@ -535,10 +602,24 @@
             document.getElementById('bowler-modal').style.display = 'flex';
         }
         function confirmBowler() { live.bowler = document.getElementById('sel-bowler').value; closeModals(); recalc(); }
+        
+        function getNextBatters() {
+            return Object.values(live.batters)
+                .filter(p => p.status === 'Yet to bat' || p.status === 'Retired')
+                .sort((a,b) => {
+                    if (a.status === 'Yet to bat' && b.status === 'Retired') return -1;
+                    if (a.status === 'Retired' && b.status === 'Yet to bat') return 1;
+                    return a.order - b.order;
+                });
+        }
+
         function openWicketModal() {
             const sel = document.getElementById('sel-next-bat');
-            const avail = Object.values(live.batters).filter(p => p.status === 'Yet to bat' || p.status === 'Retired');
-            sel.innerHTML = avail.map(p => `<option value="${p.name}">${p.name} (${p.status})</option>`).join('');
+            const avail = getNextBatters();
+            sel.innerHTML = avail.map(p => {
+                const label = p.status === 'Retired' ? `${p.name} [RET]` : p.name;
+                return `<option value="${p.name}">${label}</option>`;
+            }).join('');
             const fSel = document.getElementById('wkt-fielder');
             const fieldTeam = match.innings === 1 ? match.t2 : match.t1;
             fSel.innerHTML = `<option value="">-- None/Bowler --</option>` + fieldTeam.map(n => `<option value="${n}">${n}</option>`).join('');
@@ -551,7 +632,6 @@
             const fielder = document.getElementById('wkt-fielder').value;
             const outName = (who === 'striker') ? live.striker : live.ns;
             
-            // Mark out immediately for the history event, but recalc will handle the status update
             live.batters[outName].status = 'Out'; 
             handleBall(0, 'wicket', { type, outPlayer: outName, fielder });
             live.history.push({ event: 'new_bat', name: next });
@@ -559,8 +639,11 @@
         }
         function openRetireModal() {
             const sel = document.getElementById('sel-retire-next');
-            const avail = Object.values(live.batters).filter(p => p.status === 'Yet to bat' || p.status === 'Retired');
-            sel.innerHTML = avail.map(p => `<option value="${p.name}">${p.name} (${p.status})</option>`).join('');
+            const avail = getNextBatters();
+            sel.innerHTML = avail.map(p => {
+                const label = p.status === 'Retired' ? `${p.name} [RET]` : p.name;
+                return `<option value="${p.name}">${label}</option>`;
+            }).join('');
             document.getElementById('retire-modal').style.display = 'flex';
         }
         function confirmRetire() {
@@ -599,32 +682,18 @@
             document.getElementById('cur-bowler-display').innerText = live.bowler;
             document.getElementById('striker-name').innerText = live.striker;
             document.getElementById('ns-name').innerText = live.ns;
-            
             const bGone = (live.ov * 6) + live.balls;
             const rr = bGone > 0 ? (live.runs / (bGone/6)).toFixed(2) : "0.00";
             document.getElementById('projected-display').innerText = match.innings === 1 ? Math.round(live.runs + (rr * ((match.overs*6 - bGone)/6))) : "Chase";
-
             updatePlayerCard('striker', live.batters[live.striker]);
             updatePlayerCard('ns', live.batters[live.ns]);
-
             document.querySelector('#batter-table tbody').innerHTML = Object.values(live.batters).map(p => `<tr><td>${p.name}</td><td>${p.runs}</td><td>${p.balls}</td><td>${p[4]}</td><td>${p.status}</td></tr>`).join('');
             document.querySelector('#bowler-table tbody').innerHTML = Object.values(live.bowlers).map(b => `<tr><td>${b.name}</td><td>${Math.floor(b.balls/6)}.${b.balls%6}</td><td>${b.runs}</td><td>${b.wkts}</td><td>${b.balls>0?(b.runs/(b.balls/6)).toFixed(2):0}</td></tr>`).join('');
-            
             document.getElementById('ball-list-ui').innerHTML = live.history.slice().reverse().map((h, i) => {
-                let txt = '';
-                let clickIdx = live.history.length - 1 - i;
-                if (h.event === 'ball') {
-                    txt = `Ball: ${h.runs} (${h.type})`;
-                    if (h.wkt) txt = `<span style="color:red">WKT: ${h.wkt.type} ${h.wkt.fielder ? '('+h.wkt.fielder+')' : ''}</span>`;
-                    txt += h.zone ? ` [${h.zone.substring(0,3)}]` : '';
-                } else if (h.event === 'new_bat') {
-                    txt = `<span style="color:blue">In: ${h.name}</span>`;
-                } else if (h.event === 'replace') {
-                    txt = `<span style="color:purple">Edit: ${h.name}</span>`;
-                } else {
-                    return ''; 
-                }
-                return `<div class="history-item" onclick="openEditModal(${clickIdx})">${txt}</div>`;
+                if (h.event !== 'ball') return '';
+                let desc = `Ball: ${h.runs} (${h.type})`;
+                if (h.wkt) desc = `<span style="color:red">WKT: ${h.wkt.type} ${h.wkt.fielder ? '('+h.wkt.fielder+')' : ''}</span>`;
+                return `<div class="history-item" onclick="openEditModal(${live.history.length-1-i})">${desc} ${h.zone ? '['+h.zone.substring(0,3)+']' : ''}</div>`;
             }).join('');
         }
         function updatePlayerCard(id, p) {
