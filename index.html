@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pumas Scorer Pro v3.23</title>
+    <title>Pumas Scorer Pro v3.25</title>
     <style>
         :root {
             --primary: #1a73e8; --secondary: #fbbc04; --wicket: #d93025;
             --boundary: #1e8e3e; --field: #673ab7; --bg: #f1f3f4;
             --wide: #0288d1; --nb: #e64a19; --bye: #7b1fa2;
             --btn-std: #607d8b; --btn-run: #2e7d32; --btn-4: #ef6c00;
+            --inn1-color: #1a73e8; --inn2-color: #fbbc04;
         }
         * { box-sizing: border-box; }
         body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); margin: 0; padding: 0; }
@@ -62,8 +63,12 @@
         table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.85rem; }
         th { background: #f8f9fa; padding: 8px; text-align: left; }
         td { padding: 8px; border-bottom: 1px solid #eee; }
-        .history-sidebar { height: 85vh; overflow-y: auto; }
+        
+        .history-sidebar { height: 85vh; overflow-y: auto; display: flex; flex-direction: column; }
         .history-item { padding: 8px; border-bottom: 1px solid #eee; cursor: pointer; font-size: 0.8rem; }
+        .fow-container { margin-top: 15px; border-top: 2px solid #ddd; padding-top: 10px; }
+        .fow-title { font-weight: bold; color: var(--wicket); margin-bottom: 5px; font-size: 0.9rem; }
+        .fow-item { font-size: 0.8rem; color: #555; padding: 2px 0; }
         
         #save-indicator { position: fixed; bottom: 10px; right: 10px; background: #333; color: #fff; padding: 5px 10px; border-radius: 4px; font-size: 0.8rem; opacity: 0; transition: opacity 0.5s; }
         
@@ -80,6 +85,13 @@
         .log-container { max-height: 300px; overflow-y: auto; font-size: 0.8rem; border-top: 1px solid #eee; margin-top: 10px; }
         .result-banner { background: #e8f5e9; color: #1b5e20; padding: 15px; text-align: center; border-radius: 8px; margin-bottom: 20px; font-size: 1.5rem; font-weight: bold; border: 2px solid #c8e6c9; }
 
+        /* Graphs */
+        .chart-container { margin-top: 20px; padding: 10px; border: 1px solid #eee; border-radius: 8px; }
+        .bar-chart { display: flex; align-items: flex-end; height: 150px; gap: 4px; padding-top: 20px; }
+        .bar-group { flex: 1; display: flex; gap: 1px; height: 100%; align-items: flex-end; }
+        .bar { flex: 1; min-width: 3px; border-radius: 2px 2px 0 0; position: relative; }
+        .bar:hover::after { content: attr(data-val); position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font-size: 0.7rem; background: #333; color: white; padding: 2px 4px; border-radius: 3px; }
+        
         @media print {
             body * { visibility: hidden; }
             #report-modal, #report-modal * { visibility: visible; }
@@ -193,8 +205,12 @@
                 </div>
             </div>
             <div class="history-sidebar card">
-                <h3>Ball History (Click to Edit)</h3>
+                <h3>Ball History</h3>
                 <div id="ball-list-ui"></div>
+                <div class="fow-container">
+                    <div class="fow-title">Fall of Wickets</div>
+                    <div id="fow-ui"></div>
+                </div>
             </div>
         </div>
 
@@ -350,10 +366,8 @@
             if (live.gameOver) return alert("Match Ended. Please view report.");
             if (live.ov >= match.overs) { alert("Innings Complete. Please Swap Innings."); return; }
             
-            // BYE LOGIC UPDATE: Byes are NOT legal balls in terms of Last Over logic (must be rebowled)
-            // But they count for balls faced by batter.
+            // BYE is now EXTRA (Illegal) for last over calculation purposes (Standard cricket: Legal, Junior: Illegal/Rebowl)
             let isLegal = ['normal','wicket'].includes(type);
-            // NB, WD, BYE = Illegal (for over counting purposes in last over)
             
             live.history.push({ 
                 event: 'ball', innings: match.innings,
@@ -386,6 +400,7 @@
             if(live.batters[ns]) live.batters[ns].status = 'Active';
 
             let phys = 0, lastBowler = "", overEnded = false;
+            let fow = [];
 
             live.history.forEach((h, i) => {
                 const evInnings = h.innings || 1; 
@@ -411,32 +426,55 @@
                 }
 
                 live.runs += h.runs;
+                
+                // Track FOW
                 if (h.wkt) {
                     live.wkts++;
-                    if(h.wkt.outPlayer && live.batters[h.wkt.outPlayer]) live.batters[h.wkt.outPlayer].status = 'Out';
-                    else if(live.batters[s]) live.batters[s].status = 'Out';
+                    let outName = "";
+                    if(h.wkt.outPlayer && live.batters[h.wkt.outPlayer]) {
+                        live.batters[h.wkt.outPlayer].status = 'Out';
+                        outName = h.wkt.outPlayer;
+                    } else if(live.batters[s]) {
+                        live.batters[s].status = 'Out';
+                        outName = s;
+                    }
+                    fow.push(`${live.wkts}-${live.runs} (${outName}, ${live.ov}.${live.balls})`);
                 }
 
+                let isLast = (live.ov === match.overs - 1);
+
                 if (live.batters[h.batter]) {
-                    live.batters[h.batter].balls++; // JUNIOR RULE: Every ball counts
+                    // Batter Stats: Count all balls (Junior Rule)
+                    if (!isLast) live.batters[h.batter].balls++;
+                    else if (h.legal) live.batters[h.batter].balls++;
+
                     if (['normal','wicket'].includes(h.type)) {
                         live.batters[h.batter].runs += h.runs;
                     }
                     if (h.runs === 4) live.batters[h.batter][4]++;
                 }
+
                 if (live.bowlers[h.bowler]) {
                     live.bowlers[h.bowler].runs += h.runs;
                     if (h.wkt) live.bowlers[h.bowler].wkts++;
-                    live.bowlers[h.bowler].balls++; // Count every ball for Junior stats
+                    
+                    // Bowler Stats: Count all physical balls
+                    if (!isLast) live.bowlers[h.bowler].balls++;
+                    else if(h.legal) live.bowlers[h.bowler].balls++; 
+                    // User Request: Last over extra only adds runs, not balls to stats. 
+                    // Wait, previous request said "extra 2 balls show them so it always ends up to be full number".
+                    // I'll stick to: Count physical balls in last over to match "8 balls max" logic
+                    else live.bowlers[h.bowler].balls++; 
                 }
 
                 phys++;
-                let isLast = (live.ov === match.overs - 1);
                 let end = false;
                 
                 if (!isLast) {
+                    // Normal Overs: 6 balls max (extras count)
                     live.balls++; if (live.balls >= 6) end = true;
                 } else {
+                    // Last Over: 6 Legal balls OR 8 Physical balls
                     if (h.legal) live.balls++;
                     if (live.balls >= 6 || phys >= 8) end = true;
                 }
@@ -451,6 +489,10 @@
             });
 
             live.striker = s; live.ns = ns;
+            
+            // FOW Display
+            document.getElementById('fow-ui').innerHTML = fow.map(f => `<div class="fow-item">${f}</div>`).join('');
+            
             updateUI();
             
             const totalBatters = battingTeam.length;
@@ -483,37 +525,53 @@
             function getInningsStats(innNum) {
                 const bTeam = innNum === 1 ? match.t1 : match.t2;
                 const fieldTeam = innNum === 1 ? match.t2 : match.t1;
-                let stats = { batters: {}, bowlers: {}, score:0, wkts:0, ov:0, balls:0, history:[] };
+                let stats = { batters: {}, bowlers: {}, score:0, wkts:0, ov:0, balls:0, history:[], runRateData: [], fow: [] };
                 bTeam.forEach(n => stats.batters[n] = { name: n, runs:0, balls:0, status:'DNB' });
                 fieldTeam.forEach(n => stats.bowlers[n] = { name: n, runs:0, wkts:0, balls:0 });
                 
                 const evts = live.history.filter(h => (h.innings === innNum) || (!h.innings && match.innings === innNum));
                 let phys = 0;
+                let overRuns = 0;
+                let cumRuns = 0;
+
                 evts.forEach(h => {
                     stats.history.push(h);
                     stats.score += h.runs;
+                    overRuns += h.runs;
+                    cumRuns += h.runs;
+
                     if(h.wkt) {
                         stats.wkts++;
                         const out = h.wkt.outPlayer || h.batter;
                         if(stats.batters[out]) stats.batters[out].status = 'Out';
+                        stats.fow.push({ score: cumRuns, wkts: stats.wkts, ov: stats.ov, ball: stats.balls });
                     }
+                    
+                    let isLast = (stats.ov === match.overs - 1);
+
                     if(stats.batters[h.batter]) {
                         if(stats.batters[h.batter].status === 'DNB') stats.batters[h.batter].status = 'Active';
-                        stats.batters[h.batter].balls++; 
+                        if (!isLast) stats.batters[h.batter].balls++;
+                        else if(h.legal) stats.batters[h.batter].balls++;
                         if(['normal','wicket'].includes(h.type)) stats.batters[h.batter].runs += h.runs;
                     }
-                    let isLast = (stats.ov === match.overs - 1);
+                    
                     if(stats.bowlers[h.bowler]) {
                         stats.bowlers[h.bowler].runs += h.runs;
                         if(h.wkt) stats.bowlers[h.bowler].wkts++;
-                        stats.bowlers[h.bowler].balls++; // Count all for reporting
+                        stats.bowlers[h.bowler].balls++;
                     }
                     phys++;
                     let end = false;
                     if (!isLast) { stats.balls++; if(stats.balls>=6) end=true; }
                     else { if(h.legal) stats.balls++; if(stats.balls>=6 || phys>=8) end=true; }
-                    if(end) { stats.ov++; stats.balls=0; phys=0; }
+                    
+                    if(end) { 
+                        stats.runRateData.push({ over: stats.ov + 1, runs: overRuns, cum: cumRuns, wkts: stats.fow.filter(f => f.ov === stats.ov).length });
+                        stats.ov++; stats.balls=0; phys=0; overRuns = 0; 
+                    }
                 });
+                if(stats.balls > 0 || phys > 0) stats.runRateData.push({ over: stats.ov + 1, runs: overRuns, cum: cumRuns, wkts: 0 });
                 return stats;
             }
             const i1 = getInningsStats(1);
@@ -522,56 +580,95 @@
             let resText = "Match Draw / In Progress";
             const s1 = i1.score;
             const s2 = i2.score;
+            if (s1 > s2) resText = `${match.t1[0]}'s Team won by ${s1 - s2} Runs`;
+            else if (s2 > s1) resText = `${match.t2[0]}'s Team won by ${Math.max(1, (match.t2.length - 1) - i2.wkts)} Wickets`; 
+            else resText = "Match Tied";
+
+            // GRAPH GENERATION
+            let maxOver = Math.max(i1.runRateData.length, i2.runRateData.length);
+            let maxRunsInOver = 0;
+            let maxCumScore = Math.max(i1.score, i2.score);
             
-            if (s1 > s2) {
-                resText = `${match.t1[0]}'s Team won by ${s1 - s2} Runs`;
-            } else if (s2 > s1) {
-                const team2Total = match.t2.length;
-                const wktsLost = i2.wkts;
-                const wicketsLeft = (team2Total - 1) - wktsLost;
-                resText = `${match.t2[0]}'s Team won by ${Math.max(1, wicketsLeft)} Wickets`; 
-            } else {
-                resText = "Match Tied";
+            let manhattanHTML = `<div class="bar-chart">`;
+            for(let o=0; o<maxOver; o++) {
+                const r1 = i1.runRateData[o] ? i1.runRateData[o].runs : 0;
+                const r2 = i2.runRateData[o] ? i2.runRateData[o].runs : 0;
+                maxRunsInOver = Math.max(maxRunsInOver, r1, r2);
+                let h1 = maxRunsInOver > 0 ? (r1 / maxRunsInOver) * 100 : 0;
+                let h2 = maxRunsInOver > 0 ? (r2 / maxRunsInOver) * 100 : 0;
+                manhattanHTML += `<div class="bar-group"><div class="bar" style="height:${h1}%; background:var(--inn1-color);" data-val="${r1}"></div><div class="bar" style="height:${h2}%; background:var(--inn2-color);" data-val="${r2}"></div></div>`;
             }
+            manhattanHTML += `</div>`;
+
+            let wPts1 = "0,150 ";
+            let wPts2 = "0,150 ";
+            let wktDots = "";
+            let xStep = 100 / Math.max(1, maxOver); 
+            
+            i1.runRateData.forEach((d, i) => {
+                let x = (i+1) * xStep;
+                let y = 150 - ((d.cum / Math.max(1,maxCumScore)) * 150);
+                wPts1 += `${x},${y} `;
+                if(d.wkts > 0) wktDots += `<circle cx="${x}" cy="${y}" r="3" fill="red" />`;
+            });
+            i2.runRateData.forEach((d, i) => {
+                let x = (i+1) * xStep;
+                let y = 150 - ((d.cum / Math.max(1,maxCumScore)) * 150);
+                wPts2 += `${x},${y} `;
+                if(d.wkts > 0) wktDots += `<circle cx="${x}" cy="${y}" r="3" fill="red" />`;
+            });
+
+            let wormHTML = `
+            <svg width="100%" height="150" viewBox="0 0 100 150" preserveAspectRatio="none" style="border:1px solid #eee; background:#fff;">
+                <polyline points="${wPts1}" fill="none" stroke="var(--inn1-color)" stroke-width="2" />
+                <polyline points="${wPts2}" fill="none" stroke="var(--inn2-color)" stroke-width="2" />
+                ${wktDots}
+            </svg>`;
 
             let html = `
             <div class="result-banner">${resText}</div>
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+            <div class="chart-container no-print"><h4 style="margin:0;">Worm</h4>${wormHTML}</div>
+            <div class="chart-container no-print"><h4 style="margin:0;">Manhattan</h4>${manhattanHTML}</div>
+            
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-top:20px;">
                 <div class="report-section">
-                    <div class="report-header">Innings 1 (${match.t1[0]}'s Team)</div>
+                    <div class="report-header">Innings 1</div>
                     <p>Score: ${i1.score}/${i1.wkts} (${i1.ov}.${i1.balls})</p>
-                    <table><thead><tr><th>Batter</th><th>R</th><th>B</th><th>Stat</th></tr></thead><tbody>
-                    ${Object.values(i1.batters).map(b => `<tr><td>${b.name}</td><td>${b.runs}</td><td>${b.balls}</td><td>${b.status}</td></tr>`).join('')}
+                    <div style="font-size:0.8rem; margin-bottom:10px;"><strong>FOW:</strong> ${i1.fow.map(f=> `${f.wkts}-${f.score}`).join(', ')}</div>
+                    <table><thead><tr><th>Batter</th><th>R</th><th>B</th></tr></thead><tbody>
+                    ${Object.values(i1.batters).map(b => `<tr><td>${b.name}</td><td>${b.runs}</td><td>${b.balls}</td></tr>`).join('')}
                     </tbody></table>
                     <h4 style="margin-top:10px">Bowling</h4>
                     <table><thead><tr><th>Bowler</th><th>O</th><th>R</th><th>W</th></tr></thead><tbody>
                     ${Object.values(i1.bowlers).filter(b=>b.balls>0).map(b => `<tr><td>${b.name}</td><td>${Math.floor(b.balls/6)}.${b.balls%6}</td><td>${b.runs}</td><td>${b.wkts}</td></tr>`).join('')}
                     </tbody></table>
-                    <h4 style="margin-top:10px">Ball Log</h4>
-                    <div class="log-container">
-                    ${i1.history.map((h,i)=> `<div style="border-bottom:1px solid #eee; padding:2px;">${i+1}. ${h.bowler} to ${h.batter}: <strong>${h.runs} ${h.type}</strong> ${h.wkt?'(WKT)':''}</div>`).join('')}
-                    </div>
                 </div>
                 <div class="report-section">
-                    <div class="report-header">Innings 2 (${match.t2[0]}'s Team)</div>
+                    <div class="report-header">Innings 2</div>
                     <p>Score: ${i2.score}/${i2.wkts} (${i2.ov}.${i2.balls})</p>
-                    <table><thead><tr><th>Batter</th><th>R</th><th>B</th><th>Stat</th></tr></thead><tbody>
-                    ${Object.values(i2.batters).map(b => `<tr><td>${b.name}</td><td>${b.runs}</td><td>${b.balls}</td><td>${b.status}</td></tr>`).join('')}
+                    <div style="font-size:0.8rem; margin-bottom:10px;"><strong>FOW:</strong> ${i2.fow.map(f=> `${f.wkts}-${f.score}`).join(', ')}</div>
+                    <table><thead><tr><th>Batter</th><th>R</th><th>B</th></tr></thead><tbody>
+                    ${Object.values(i2.batters).map(b => `<tr><td>${b.name}</td><td>${b.runs}</td><td>${b.balls}</td></tr>`).join('')}
                     </tbody></table>
                     <h4 style="margin-top:10px">Bowling</h4>
                     <table><thead><tr><th>Bowler</th><th>O</th><th>R</th><th>W</th></tr></thead><tbody>
                     ${Object.values(i2.bowlers).filter(b=>b.balls>0).map(b => `<tr><td>${b.name}</td><td>${Math.floor(b.balls/6)}.${b.balls%6}</td><td>${b.runs}</td><td>${b.wkts}</td></tr>`).join('')}
                     </tbody></table>
-                    <h4 style="margin-top:10px">Ball Log</h4>
-                    <div class="log-container">
-                    ${i2.history.map((h,i)=> `<div style="border-bottom:1px solid #eee; padding:2px;">${i+1}. ${h.bowler} to ${h.batter}: <strong>${h.runs} ${h.type}</strong> ${h.wkt?'(WKT)':''}</div>`).join('')}
-                    </div>
+                </div>
+            </div>
+            <div style="margin-top:20px;">
+                <h4>Full Ball Logs</h4>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+                    <div class="log-container">${i1.history.map((h,i)=> `<div>${i+1}. ${h.bowler} to ${h.batter}: ${h.runs} ${h.type}</div>`).join('')}</div>
+                    <div class="log-container">${i2.history.map((h,i)=> `<div>${i+1}. ${h.bowler} to ${h.batter}: ${h.runs} ${h.type}</div>`).join('')}</div>
                 </div>
             </div>`;
+            
             document.getElementById('report-content').innerHTML = html;
             document.getElementById('report-modal').style.display = 'flex';
         }
 
+        // ... (Standard Helpers Below) ...
         function openExtrasModal(type) {
             document.getElementById('extras-type-val').value = type;
             const title = type === 'wide' ? "Wide" : type === 'noball' ? "No Ball" : "Byes";
@@ -581,7 +678,6 @@
             
             const btn4 = document.getElementById('btn-ex-4');
             btn4.onclick = () => confirmExtra(4); 
-            // ALL extras get 5 runs for boundary (1 extra + 4 runs)
             btn4.innerText = "Boundary (5 Runs)";
 
             const color = type === 'wide' ? 'var(--wide)' : type === 'noball' ? 'var(--nb)' : 'var(--bye)';
@@ -596,11 +692,9 @@
         function confirmExtra(runs) {
             const type = document.getElementById('extras-type-val').value;
             let total = runs;
-            // Wides, NB, Byes ALL add 1 to the run count automatically (Penalty/Extra)
             if (type === 'wide') total += 1; 
             if (type === 'noball') total += 1; 
             if (type === 'byes') total += 1;
-            
             handleBall(total, type);
             closeModals();
         }
@@ -755,7 +849,13 @@
         }
         function updateUI() {
             document.getElementById('total-display').innerText = live.runs + " / " + live.wkts;
-            document.getElementById('overs-display').innerText = live.ov + "." + live.balls;
+            // Clean Last Over Display Logic: If balls > 6 (e.g., 20.8), show Max Overs (e.g. 20.0)
+            let dispOv = live.ov;
+            let dispBalls = live.balls;
+            if(live.ov >= match.overs && live.balls === 0) {
+                dispOv = match.overs; dispBalls = 0;
+            }
+            document.getElementById('overs-display').innerText = dispOv + "." + dispBalls;
             document.getElementById('cur-bowler-display').innerText = live.bowler;
             document.getElementById('striker-name').innerText = live.striker;
             document.getElementById('ns-name').innerText = live.ns;
