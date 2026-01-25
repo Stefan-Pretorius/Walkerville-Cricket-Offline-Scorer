@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pumas Scorer Pro v3.40</title>
+    <title>Pumas Scorer Pro v3.41</title>
     <style>
         :root {
             --primary: #1a73e8; --secondary: #fbbc04; --wicket: #d93025;
@@ -421,6 +421,13 @@
                     if (h.role === 'bowler') live.bowler = h.name;
                     return; 
                 }
+                
+                // FIXED RETIRE LOGIC IN HISTORY
+                if (h.event === 'retire') {
+                    if (live.batters[h.name]) live.batters[h.name].status = 'Retired';
+                    return;
+                }
+
                 if (h.event === 'new_bat') { 
                     if (live.batters[h.name]) {
                         if (live.batters[h.name].status === 'Retired') {
@@ -500,7 +507,6 @@
                     live.ov++; live.balls = 0; phys = 0; [s, ns] = [ns, s];
                     lastBowler = h.bowler;
                     
-                    // FIXED PROMPT LOGIC
                     if (i === live.history.length - 1 && !live.gameOver) {
                        overEnded = true;
                     }
@@ -530,10 +536,9 @@
                 }
             }
 
-            // PROMPT LOOP FIX: Use memory to only prompt once per over index
             if (overEnded && !live.gameOver && document.getElementById('scoring-screen').style.display !== 'none') {
-                // If the current bowler is still the last bowler, and we haven't prompted for this over index yet
-                if (!live.promptedOvers.includes(live.ov) && live.bowler === lastBowler) {
+                const alreadyPrompted = live.promptedOvers.includes(live.ov);
+                if (!alreadyPrompted && live.bowler === lastBowler) {
                     live.promptedOvers.push(live.ov);
                     setTimeout(openBowlerModal, 200);
                 }
@@ -603,15 +608,14 @@
             
             let buildPts = (evts) => {
                 let pts = "0,150 ";
-                let wktDots = "";
                 let cum = 0;
                 let ov = 0; let b = 0; let phys = 0;
+                let wktDots = "";
                 
                 let maxScore1 = evts1.reduce((acc, x) => acc + (x.runs || 0), 0);
                 let maxScore2 = evts2.reduce((acc, x) => acc + (x.runs || 0), 0);
                 let totalMax = Math.max(match.target || 0, maxScore1, maxScore2, 50);
                 
-                // Use Standard Viewbox 0-100 instead of stretched 400
                 let xStep = 100 / Math.max(1, match.overs); 
                 
                 evts.forEach((h, i) => {
@@ -628,19 +632,16 @@
                     let y = 150 - ((cum / totalMax) * 150); 
                     pts += `${x},${y} `;
                     
-                    if (h.wkt) {
-                        wktDots += `<circle cx="${x}" cy="${y}" r="2" fill="red" />`;
-                    }
+                    if(h.wkt) wktDots += `<circle cx="${x}" cy="${y}" r="2" fill="red" />`;
 
                     if (end) { ov++; b = 0; phys = 0; }
                 });
-                return { line: pts, dots: wktDots };
+                return {line: pts, dots: wktDots};
             };
             
             const d1 = buildPts(evts1);
             const d2 = buildPts(evts2);
             
-            // REMOVED PRESERVE ASPECT RATIO NONE to fix warped dots
             document.getElementById('live-chart-ui').innerHTML = `
             <svg width="100%" height="200" viewBox="0 0 100 150" preserveAspectRatio="none" style="background:#fff; border:1px solid #ddd;">
                <polyline points="${d1.line}" fill="none" stroke="var(--inn1-color)" stroke-width="1.5" />
@@ -760,29 +761,23 @@
             }
             manhattanHTML += `</div>`;
 
-            let wPts1 = "0,150 ";
-            let wPts2 = "0,150 ";
-            let wktDots = "";
-            let xStep = 100 / Math.max(1, maxOver); 
+            // Report Worm (Standard Viewbox)
+            const getPoints = (data, totalMax) => {
+                let pts = "0,150 ";
+                let xStep = 100 / Math.max(1, match.overs); // Scaled to Overs
+                data.forEach((d, i) => {
+                    let x = (i+1) * xStep;
+                    let y = 150 - ((d.cum / totalMax) * 150);
+                    pts += `${x},${y} `;
+                });
+                return pts;
+            };
             
-            i1.runRateData.forEach((d, i) => {
-                let x = (i+1) * xStep;
-                let y = 150 - ((d.cum / maxCumScore) * 150);
-                wPts1 += `${x},${y} `;
-                if(d.wkts > 0) wktDots += `<circle cx="${x}" cy="${y}" r="2" fill="red" />`;
-            });
-            i2.runRateData.forEach((d, i) => {
-                let x = (i+1) * xStep;
-                let y = 150 - ((d.cum / maxCumScore) * 150);
-                wPts2 += `${x},${y} `;
-                if(d.wkts > 0) wktDots += `<circle cx="${x}" cy="${y}" r="2" fill="red" />`;
-            });
-
+            let maxScore = Math.max(i1.score, i2.score, 50);
             let wormHTML = `
             <svg width="100%" height="150" viewBox="0 0 100 150" preserveAspectRatio="none" style="border:1px solid #eee; background:#fff;">
-                <polyline points="${wPts1}" fill="none" stroke="var(--inn1-color)" stroke-width="2" />
-                <polyline points="${wPts2}" fill="none" stroke="var(--inn2-color)" stroke-width="2" />
-                ${wktDots}
+                <polyline points="${getPoints(i1.runRateData, maxScore)}" fill="none" stroke="var(--inn1-color)" stroke-width="2" />
+                <polyline points="${getPoints(i2.runRateData, maxScore)}" fill="none" stroke="var(--inn2-color)" stroke-width="2" />
             </svg>`;
 
             let html = `
@@ -879,7 +874,17 @@
         function openWicketModal() { const sel = document.getElementById('sel-next-bat'); const avail = getNextBatters(); sel.innerHTML = avail.map(p => { const label = p.status === 'Retired' ? `${p.name} [RET]` : p.name; return `<option value="${p.name}">${label}</option>`; }).join(''); const fSel = document.getElementById('wkt-fielder'); const fieldTeam = match.innings === 1 ? match.t2 : match.t1; fSel.innerHTML = `<option value="">-- None/Bowler --</option>` + fieldTeam.map(n => `<option value="${n}">${n}</option>`).join(''); document.getElementById('wicket-modal').style.display = 'flex'; }
         function confirmWicket() { const who = document.getElementById('wkt-who').value; const next = document.getElementById('sel-next-bat').value; const type = document.getElementById('wkt-type').value; const fielder = document.getElementById('wkt-fielder').value; const outName = (who === 'striker') ? live.striker : live.ns; live.batters[outName].status = 'Out'; handleBall(0, 'wicket', { type, outPlayer: outName, fielder }); live.history.push({ event: 'new_bat', name: next }); closeModals(); recalc(); }
         function openRetireModal() { const sel = document.getElementById('sel-retire-next'); const avail = getNextBatters(); sel.innerHTML = avail.map(p => { const label = p.status === 'Retired' ? `${p.name} [RET]` : p.name; return `<option value="${p.name}">${label}</option>`; }).join(''); document.getElementById('retire-modal').style.display = 'flex'; }
-        function confirmRetire() { const next = document.getElementById('sel-retire-next').value; live.batters[live.striker].status = 'Retired'; live.history.push({ event: 'new_bat', name: next }); closeModals(); recalc(); }
+        
+        // --- RETIRE FIX (Status & Recalc) ---
+        function confirmRetire() { 
+            const next = document.getElementById('sel-retire-next').value; 
+            live.batters[live.striker].status = 'Retired'; // Immediate update
+            live.history.push({ event: 'retire', name: live.striker }); // Log it
+            live.history.push({ event: 'new_bat', name: next }); 
+            closeModals(); 
+            recalc(); 
+        }
+        
         function openManualSwap(role) { const sel = document.getElementById('sel-swap'); const pool = (role === 'bowler') ? (match.innings === 1 ? match.t2 : match.t1) : (match.innings === 1 ? match.t1 : match.t2); sel.innerHTML = pool.map(n => `<option value="${n}">${n}</option>`).join(''); document.getElementById('swap-role').value = role; document.getElementById('swap-modal').style.display = 'flex'; }
         function confirmSwap() { const role = document.getElementById('swap-role').value; const name = document.getElementById('sel-swap').value; if (role === 'striker' && name === live.striker) return closeModals(); if (role === 'ns' && name === live.ns) return closeModals(); if ((role === 'striker' && name === live.ns) || (role === 'ns' && name === live.striker)) return manualSwapStrike(); live.history.push({ event: 'replace', role, name }); closeModals(); recalc(); }
         function checkRetire(b) { if (!b || b.status !== 'Active') return; const active = Object.values(live.batters).filter(p => p.status === 'Active' || p.status === 'Yet to bat').length; if (active <= 2 || !b || b.balls === 0) return; if (b.stint === 1 && b.balls >= live.retireLimit) { setTimeout(() => { alert(b.name + " reached limit. Retire?"); }, 500); } if (b.stint === 2 && b.returnLimit !== null && live.ov >= b.returnLimit && live.balls === 0) { setTimeout(() => { alert(b.name + " return stint done. Retire?"); }, 500); } }
