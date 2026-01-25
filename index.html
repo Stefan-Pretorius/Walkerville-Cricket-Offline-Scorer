@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pumas Scorer Pro v3.43</title>
+    <title>Pumas Scorer Pro v3.44</title>
     <style>
         :root {
             --primary: #1a73e8; --secondary: #fbbc04; --wicket: #d93025;
@@ -297,6 +297,9 @@
             <label>Type:</label>
             <select id="edit-type"><option value="normal">Normal</option><option value="wide">Wide</option><option value="noball">No Ball</option><option value="byes">Byes</option><option value="legbye">Leg Byes</option></select>
             
+            <label>Batter:</label>
+            <select id="edit-batter"></select>
+
             <label>Bowler:</label>
             <select id="edit-bowler"></select>
 
@@ -604,14 +607,9 @@
                 return `<tr><td>${b.name}</td><td>${ov}</td><td>${b.runs}</td><td>${b.wkts}</td><td>${econ}</td></tr>`;
             }).join('');
             
-            // Detailed Ball History
             document.getElementById('ball-list-ui').innerHTML = live.history.slice().reverse().map((h, i) => {
                 if (h.innings && h.innings !== match.innings) return ''; 
                 if (h.event !== 'ball') return '';
-                
-                // Calculate Over Number for display (Approximate based on array index is hard, rely on recalc state? No, store it?)
-                // Recalculating history state for display is heavy. 
-                // Let's just show basic info + Bowler/Batter as requested.
                 
                 let desc = `<span style="color:#666">${h.bowler} to ${h.batter}</span>: <strong>${h.runs}</strong> (${h.type})`;
                 if (h.wkt) desc = `<span style="color:red; font-weight:bold;">WKT (${h.bowler} to ${h.batter}): ${h.wkt.type}</span>`;
@@ -848,7 +846,6 @@
             document.getElementById('report-modal').style.display = 'flex';
         }
 
-        // ... Standard Helpers ...
         function openExtrasModal(type) {
             document.getElementById('extras-type-val').value = type;
             const title = type === 'wide' ? "Wide" : type === 'noball' ? "No Ball" : type === 'byes' ? "Byes" : "Leg Byes";
@@ -900,10 +897,16 @@
                 document.getElementById('edit-runs').value = h.runs; 
                 document.getElementById('edit-type').value = h.type; 
                 document.getElementById('edit-zone').value = h.zone || ""; 
-                // Populate Bowler Edit Dropdown
-                const pool = match.innings === 1 ? match.t2 : match.t1;
-                const bSel = document.getElementById('edit-bowler');
-                bSel.innerHTML = pool.map(n => `<option value="${n}" ${n===h.bowler?'selected':''}>${n}</option>`).join('');
+                
+                // Populate Batter Edit
+                const batPool = match.innings === 1 ? match.t1 : match.t2;
+                const batSel = document.getElementById('edit-batter');
+                batSel.innerHTML = batPool.map(n => `<option value="${n}" ${n===h.batter?'selected':''}>${n}</option>`).join('');
+
+                // Populate Bowler Edit
+                const bowlPool = match.innings === 1 ? match.t2 : match.t1;
+                const bowlSel = document.getElementById('edit-bowler');
+                bowlSel.innerHTML = bowlPool.map(n => `<option value="${n}" ${n===h.bowler?'selected':''}>${n}</option>`).join('');
                 
                 document.getElementById('edit-history-modal').style.display = 'flex'; 
             } 
@@ -914,18 +917,9 @@
             live.history[idx].runs = parseInt(document.getElementById('edit-runs').value); 
             live.history[idx].type = document.getElementById('edit-type').value; 
             live.history[idx].zone = document.getElementById('edit-zone').value; 
-            live.history[idx].bowler = document.getElementById('edit-bowler').value; // Save Bowler Change
-            live.history[idx].legal = ['normal','wicket','byes','legbye'].includes(live.history[idx].type) ? false : false; // Reset legal check
-            // Logic for legal is complex in edit, simplifying:
-            const t = live.history[idx].type;
-            live.history[idx].legal = ['normal','wicket','byes','legbye'].includes(t); // Basic check
-            // Note: Byes/Legbyes are "Legal" deliveries in terms of ball count in Junior Rules 1-27?
-            // Re-use logic: 
-            // In HandleBall: isLegal = ['normal','wicket'].includes(type) ??
-            // Actually in HandleBall I wrote: let isLegal = ['normal','wicket'].includes(type);
-            // Byes/Legbyes are usually NOT legal balls in strict cricket, but in 1-27 junior rules they count as balls faced/bowled.
-            // My recalc logic handles the "counting" based on type, not just .legal flag.
-            // So updating type is sufficient.
+            live.history[idx].batter = document.getElementById('edit-batter').value; // Save Batter
+            live.history[idx].bowler = document.getElementById('edit-bowler').value; // Save Bowler
+            live.history[idx].legal = ['normal','wicket','byes','legbye'].includes(live.history[idx].type); 
             closeModals(); 
             recalc(); 
         }
