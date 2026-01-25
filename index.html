@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pumas Scorer Pro v3.33</title>
+    <title>Pumas Scorer Pro v3.40</title>
     <style>
         :root {
             --primary: #1a73e8; --secondary: #fbbc04; --wicket: #d93025;
@@ -92,6 +92,10 @@
         .bar { flex: 1; min-width: 3px; border-radius: 2px 2px 0 0; position: relative; }
         .bar:hover::after { content: attr(data-val); position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font-size: 0.7rem; background: #333; color: white; padding: 2px 4px; border-radius: 3px; }
         
+        .collapsible { background-color: #f1f1f1; cursor: pointer; padding: 12px; width: 100%; border: none; text-align: left; outline: none; font-size: 1rem; border-radius: 8px; margin-bottom: 5px; font-weight: bold; }
+        .active-coll, .collapsible:hover { background-color: #ccc; }
+        .coll-content { padding: 0 10px; display: block; overflow: hidden; background-color: white; border-radius: 0 0 8px 8px; transition: max-height 0.2s ease-out; }
+
         @media print {
             body * { visibility: hidden; }
             #report-modal, #report-modal * { visibility: visible; }
@@ -158,7 +162,12 @@
                     <button class="btn-secondary" style="background:#607d8b; color:white;" onclick="openRetireModal()">🏃 Retire</button>
                 </div>
 
-                <div class="controls card">
+                <button type="button" class="collapsible active-coll" onclick="toggleGraph()">📈 Live Worm Graph</button>
+                <div id="live-chart-content" class="coll-content" style="display:block;">
+                    <div id="live-chart-ui"></div>
+                </div>
+
+                <div class="controls card" style="margin-top:10px;">
                     <div class="grid-row">
                         <button onclick="handleBall(0, 'normal')">0</button>
                         <button onclick="handleBall(1, 'normal')">1</button>
@@ -175,6 +184,7 @@
                         <button onclick="openExtrasModal('wide')" class="btn-wide">WD</button>
                         <button onclick="openExtrasModal('noball')" class="btn-nb">NB</button>
                         <button onclick="openExtrasModal('byes')" class="btn-bye">BYE</button>
+                        <button onclick="openExtrasModal('legbye')" class="btn-bye">LB</button>
                         <button onclick="openFieldModal()" style="background:var(--field); color:white;">Map</button>
                     </div>
                     <div style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;">
@@ -284,7 +294,7 @@
             <h3>Edit Ball</h3>
             <label>Runs:</label> <input type="number" id="edit-runs">
             <label>Type:</label>
-            <select id="edit-type"><option value="normal">Normal</option><option value="wide">Wide</option><option value="noball">No Ball</option><option value="byes">Byes</option></select>
+            <select id="edit-type"><option value="normal">Normal</option><option value="wide">Wide</option><option value="noball">No Ball</option><option value="byes">Byes</option><option value="legbye">Leg Byes</option></select>
             <label>Zone:</label>
             <select id="edit-zone">
                 <option value="">--None--</option><option value="Third Man">Third Man</option><option value="Fine Leg">Fine Leg</option>
@@ -325,7 +335,7 @@
 
     <script>
         let match = { innings: 1, target: null, t1: [], t2: [], count1: 13, count2: 13, overs: 28 };
-        let live = { runs: 0, wkts: 0, ov: 0, balls: 0, striker: "", ns: "", bowler: "", history: [], batters: {}, bowlers: {}, retireLimit: 13, gameOver: false };
+        let live = { runs: 0, wkts: 0, ov: 0, balls: 0, striker: "", ns: "", bowler: "", history: [], batters: {}, bowlers: {}, retireLimit: 13, gameOver: false, promptedOvers: [] };
         const rLimits = { 8: 21, 9: 18, 10: 16, 11: 15, 12: 14, 13: 13 };
 
         document.getElementById('bat-list').addEventListener('input', () => {
@@ -355,7 +365,6 @@
             bo.forEach(n => live.bowlers[n] = { name: n, runs: 0, wkts: 0, balls: 0 });
             live.bowler = bo[0];
             
-            // FIX: Order of ops to ensure Recalc runs properly
             document.getElementById('setup-screen').style.display = 'none';
             document.getElementById('scoring-screen').style.display = 'grid';
             
@@ -380,16 +389,13 @@
         }
 
         function recalc() {
-            // FIX: Allow recalc to run even if setup is momentarily visible during load
-            // Only block if we are actually editing setup and not forcing a recalc
-            
             live.runs = 0; live.wkts = 0; live.ov = 0; live.balls = 0;
             live.batters = {}; live.bowlers = {};
+            if(!live.promptedOvers) live.promptedOvers = [];
             
             const battingTeam = match.innings === 1 ? match.t1 : match.t2;
             const bowlingTeam = match.innings === 1 ? match.t2 : match.t1;
             
-            // Re-init full list
             battingTeam.forEach((n, i) => {
                 live.batters[n] = { name: n, runs: 0, balls: 0, 4:0, status: 'Yet to bat', stint: 1, returnLimit: null, order: i };
             });
@@ -427,7 +433,7 @@
                     return; 
                 }
 
-                live.runs += h.runs;
+                live.runs += (h.runs || 0);
                 
                 if (h.wkt) {
                     live.wkts++;
@@ -444,23 +450,32 @@
 
                 let isLast = (live.ov === match.overs - 1);
 
-                // CATCH-ALL SAFETY: If batter missing from team list
                 if (!live.batters[h.batter]) {
                     live.batters[h.batter] = { name: h.batter, runs: 0, balls: 0, 4:0, status: 'Active', stint: 1, returnLimit: null, order: 99 };
                 }
 
                 if (live.batters[h.batter]) {
-                    live.batters[h.batter].balls++; 
+                    if (!isLast) {
+                        live.batters[h.batter].balls++;
+                    } else {
+                        if (h.legal) live.batters[h.batter].balls++;
+                    }
+
                     if (['normal','wicket'].includes(h.type)) {
-                        live.batters[h.batter].runs += h.runs;
+                        live.batters[h.batter].runs += (h.runs || 0);
                     }
                     if (h.runs === 4) live.batters[h.batter][4]++;
                 }
 
                 if (live.bowlers[h.bowler]) {
-                    live.bowlers[h.bowler].runs += h.runs;
+                    live.bowlers[h.bowler].runs += (h.runs || 0);
                     if (h.wkt) live.bowlers[h.bowler].wkts++;
-                    live.bowlers[h.bowler].balls++;
+                    
+                    if (!isLast) {
+                        live.bowlers[h.bowler].balls++;
+                    } else {
+                        if (h.legal) live.bowlers[h.bowler].balls++;
+                    }
                 }
 
                 phys++;
@@ -473,12 +488,22 @@
                     if (live.balls >= 6 || phys >= 8) end = true;
                 }
 
-                if (h.runs % 2 !== 0) [s, ns] = [ns, s];
+                if ((h.runs || 0) % 2 !== 0) [s, ns] = [ns, s];
 
                 if (end) {
+                    if (isLast && phys >= 8 && live.balls < 6) {
+                        let diff = 6 - live.balls;
+                        if(live.bowlers[h.bowler]) live.bowlers[h.bowler].balls += diff;
+                        live.balls = 6; 
+                    }
+
                     live.ov++; live.balls = 0; phys = 0; [s, ns] = [ns, s];
                     lastBowler = h.bowler;
-                    if (i === live.history.length - 1) overEnded = true;
+                    
+                    // FIXED PROMPT LOGIC
+                    if (i === live.history.length - 1 && !live.gameOver) {
+                       overEnded = true;
+                    }
                 }
             });
 
@@ -505,14 +530,143 @@
                 }
             }
 
-            const isWicketOpen = document.getElementById('wicket-modal').style.display === 'flex';
-            const isRetireOpen = document.getElementById('retire-modal').style.display === 'flex';
-            
-            if (overEnded && live.bowler === lastBowler && !isWicketOpen && !isRetireOpen && !live.gameOver) {
-                openBowlerModal();
+            // PROMPT LOOP FIX: Use memory to only prompt once per over index
+            if (overEnded && !live.gameOver && document.getElementById('scoring-screen').style.display !== 'none') {
+                // If the current bowler is still the last bowler, and we haven't prompted for this over index yet
+                if (!live.promptedOvers.includes(live.ov) && live.bowler === lastBowler) {
+                    live.promptedOvers.push(live.ov);
+                    setTimeout(openBowlerModal, 200);
+                }
             }
+            
             checkRetire(live.batters[s]);
             saveToMemory();
+        }
+
+        function updateUI() {
+            document.getElementById('total-display').innerText = live.runs + " / " + live.wkts;
+            
+            let dispOv = live.ov;
+            let dispBalls = live.balls;
+            if(live.ov >= match.overs && live.balls === 0) {
+                dispOv = match.overs; dispBalls = 0;
+            }
+            document.getElementById('overs-display').innerText = dispOv + "." + dispBalls;
+            
+            document.getElementById('cur-bowler-display').innerText = live.bowler;
+            document.getElementById('striker-name').innerText = live.striker;
+            document.getElementById('ns-name').innerText = live.ns;
+            
+            const bGone = (live.ov * 6) + live.balls;
+            const rr = bGone > 0 ? (live.runs / (bGone/6)).toFixed(2) : "0.00";
+            let projText = "";
+            if (match.innings === 1) {
+                projText = Math.round(live.runs + (rr * ((match.overs*6 - bGone)/6)));
+            } else {
+                if (live.runs >= match.target) {
+                    projText = "WIN!";
+                    document.getElementById('target-box').classList.add('passed');
+                    document.getElementById('target-val').innerText = "Passed";
+                } else {
+                    const need = match.target - live.runs;
+                    projText = `Need ${need}`;
+                    document.getElementById('target-val').innerText = match.target;
+                }
+            }
+            document.getElementById('projected-display').innerText = projText;
+            
+            updatePlayerCard('striker', live.batters[live.striker]);
+            updatePlayerCard('ns', live.batters[live.ns]);
+            
+            document.querySelector('#batter-table tbody').innerHTML = Object.values(live.batters).map(p => `<tr><td>${p.name}</td><td>${p.runs}</td><td>${p.balls}</td><td>${p[4]}</td><td>${p.status}</td></tr>`).join('');
+            
+            document.querySelector('#bowler-table tbody').innerHTML = Object.values(live.bowlers).map(b => {
+                let ov = Math.floor(b.balls/6) + "." + (b.balls%6);
+                let econ = b.balls > 0 ? (b.runs/(b.balls/6)).toFixed(2) : "0.00";
+                return `<tr><td>${b.name}</td><td>${ov}</td><td>${b.runs}</td><td>${b.wkts}</td><td>${econ}</td></tr>`;
+            }).join('');
+            
+            document.getElementById('ball-list-ui').innerHTML = live.history.slice().reverse().map((h, i) => {
+                if (h.innings && h.innings !== match.innings) return ''; 
+                if (h.event !== 'ball') return '';
+                let desc = `Ball: ${h.runs} (${h.type})`;
+                if (h.wkt) desc = `<span style="color:red">WKT: ${h.wkt.type} ${h.wkt.fielder ? '('+h.wkt.fielder+')' : ''}</span>`;
+                return `<div class="history-item" onclick="openEditModal(${live.history.length-1-i})">${desc} ${h.zone ? '['+h.zone.substring(0,3)+']' : ''}</div>`;
+            }).join('');
+            
+            renderLiveGraph();
+        }
+
+        function renderLiveGraph() {
+            const evts1 = live.history.filter(h => ((h.innings === 1) || (!h.innings && match.innings === 1)) && h.event === 'ball');
+            const evts2 = live.history.filter(h => ((h.innings === 2) || (!h.innings && match.innings === 2)) && h.event === 'ball');
+            
+            let buildPts = (evts) => {
+                let pts = "0,150 ";
+                let wktDots = "";
+                let cum = 0;
+                let ov = 0; let b = 0; let phys = 0;
+                
+                let maxScore1 = evts1.reduce((acc, x) => acc + (x.runs || 0), 0);
+                let maxScore2 = evts2.reduce((acc, x) => acc + (x.runs || 0), 0);
+                let totalMax = Math.max(match.target || 0, maxScore1, maxScore2, 50);
+                
+                // Use Standard Viewbox 0-100 instead of stretched 400
+                let xStep = 100 / Math.max(1, match.overs); 
+                
+                evts.forEach((h, i) => {
+                    let r = h.runs || 0; 
+                    cum += r;
+                    let isLast = (ov === match.overs - 1);
+                    phys++;
+                    let end = false;
+                    if (!isLast) { b++; if (b >= 6) end = true; } 
+                    else { if (h.legal) b++; if (b >= 6 || phys >= 8) end = true; }
+                    
+                    let progressInOver = isLast ? (phys/8) : (b/6); 
+                    let x = (ov * xStep) + (progressInOver * xStep);
+                    let y = 150 - ((cum / totalMax) * 150); 
+                    pts += `${x},${y} `;
+                    
+                    if (h.wkt) {
+                        wktDots += `<circle cx="${x}" cy="${y}" r="2" fill="red" />`;
+                    }
+
+                    if (end) { ov++; b = 0; phys = 0; }
+                });
+                return { line: pts, dots: wktDots };
+            };
+            
+            const d1 = buildPts(evts1);
+            const d2 = buildPts(evts2);
+            
+            // REMOVED PRESERVE ASPECT RATIO NONE to fix warped dots
+            document.getElementById('live-chart-ui').innerHTML = `
+            <svg width="100%" height="200" viewBox="0 0 100 150" preserveAspectRatio="none" style="background:#fff; border:1px solid #ddd;">
+               <polyline points="${d1.line}" fill="none" stroke="var(--inn1-color)" stroke-width="1.5" />
+               ${d1.dots}
+               <polyline points="${d2.line}" fill="none" stroke="var(--inn2-color)" stroke-width="1.5" />
+               ${d2.dots}
+            </svg>`;
+        }
+
+        function toggleGraph() {
+            const c = document.getElementById("live-chart-content");
+            c.style.display = c.style.display === "block" ? "none" : "block";
+        }
+
+        function updatePlayerCard(id, p) {
+            if (!p) return;
+            document.getElementById(id + '-runs').innerText = p.runs;
+            document.getElementById(id + '-balls').innerText = p.balls;
+            const b = document.getElementById(id + '-badge');
+            if (p.stint === 2) {
+                const left = p.returnLimit - live.ov;
+                b.innerText = `Return: ${left}ov`; b.className = left <= 0 ? "balls-left-badge alert" : "balls-left-badge";
+            } else {
+                const left = live.retireLimit - p.balls;
+                b.innerText = `Limit: ${left}`; b.className = left <= 0 ? "balls-left-badge alert" : "balls-left-badge";
+            }
         }
 
         function generateReport() {
@@ -529,10 +683,12 @@
                 let cumRuns = 0;
 
                 evts.forEach(h => {
+                    if (h.event !== 'ball') return;
                     stats.history.push(h);
-                    stats.score += h.runs;
-                    overRuns += h.runs;
-                    cumRuns += h.runs;
+                    let r = h.runs || 0;
+                    stats.score += r;
+                    overRuns += r;
+                    cumRuns += r;
 
                     if(h.wkt) {
                         stats.wkts++;
@@ -543,21 +699,23 @@
                     
                     let isLast = (stats.ov === match.overs - 1);
 
-                    // REPORT SAFETY
                     if (!stats.batters[h.batter]) {
                         stats.batters[h.batter] = { name: h.batter, runs: 0, balls: 0, status: 'Active' };
                     }
 
                     if(stats.batters[h.batter]) {
                         if(stats.batters[h.batter].status === 'DNB') stats.batters[h.batter].status = 'Active';
-                        stats.batters[h.batter].balls++; 
-                        if(['normal','wicket'].includes(h.type)) stats.batters[h.batter].runs += h.runs;
+                        if (!isLast) stats.batters[h.batter].balls++;
+                        else if (h.legal) stats.batters[h.batter].balls++;
+
+                        if(['normal','wicket'].includes(h.type)) stats.batters[h.batter].runs += r;
                     }
                     
                     if(stats.bowlers[h.bowler]) {
-                        stats.bowlers[h.bowler].runs += h.runs;
+                        stats.bowlers[h.bowler].runs += r;
                         if(h.wkt) stats.bowlers[h.bowler].wkts++;
-                        stats.bowlers[h.bowler].balls++; 
+                        if (!isLast) stats.bowlers[h.bowler].balls++;
+                        else if (h.legal) stats.bowlers[h.bowler].balls++;
                     }
                     phys++;
                     let end = false;
@@ -565,6 +723,12 @@
                     else { if(h.legal) stats.balls++; if(stats.balls>=6 || phys>=8) end=true; }
                     
                     if(end) { 
+                        if (isLast && phys >= 8 && stats.balls < 6) {
+                            let diff = 6 - stats.balls;
+                            if(stats.bowlers[h.bowler]) stats.bowlers[h.bowler].balls += diff;
+                            stats.balls = 6; 
+                        }
+
                         stats.runRateData.push({ over: stats.ov + 1, runs: overRuns, cum: cumRuns, wkts: stats.fow.filter(f => f.ov === stats.ov).length });
                         stats.ov++; stats.balls=0; phys=0; overRuns = 0; 
                     }
@@ -582,18 +746,16 @@
             else if (s2 > s1) resText = `${match.t2[0]}'s Team won by ${Math.max(1, (match.t2.length - 1) - i2.wkts)} Wickets`; 
             else resText = "Match Tied";
 
-            // GRAPH GENERATION (Safe)
             let maxOver = Math.max(i1.runRateData.length, i2.runRateData.length);
-            let maxRunsInOver = 0;
-            let maxCumScore = Math.max(i1.score, i2.score, 10);
+            let maxCumScore = Math.max(i1.score, i2.score, 50);
             
             let manhattanHTML = `<div class="bar-chart">`;
             for(let o=0; o<maxOver; o++) {
                 const r1 = i1.runRateData[o] ? i1.runRateData[o].runs : 0;
                 const r2 = i2.runRateData[o] ? i2.runRateData[o].runs : 0;
-                maxRunsInOver = Math.max(maxRunsInOver, r1, r2);
-                let h1 = maxRunsInOver > 0 ? (r1 / maxRunsInOver) * 100 : 0;
-                let h2 = maxRunsInOver > 0 ? (r2 / maxRunsInOver) * 100 : 0;
+                let maxR = Math.max(10, ...i1.runRateData.map(d=>d.runs), ...i2.runRateData.map(d=>d.runs));
+                let h1 = (r1 / maxR) * 100;
+                let h2 = (r2 / maxR) * 100;
                 manhattanHTML += `<div class="bar-group"><div class="bar" style="height:${h1}%; background:var(--inn1-color);" data-val="${r1}"></div><div class="bar" style="height:${h2}%; background:var(--inn2-color);" data-val="${r2}"></div></div>`;
             }
             manhattanHTML += `</div>`;
@@ -605,15 +767,15 @@
             
             i1.runRateData.forEach((d, i) => {
                 let x = (i+1) * xStep;
-                let y = 150 - ((d.cum / Math.max(1,maxCumScore)) * 150);
+                let y = 150 - ((d.cum / maxCumScore) * 150);
                 wPts1 += `${x},${y} `;
-                if(d.wkts > 0) wktDots += `<circle cx="${x}" cy="${y}" r="3" fill="red" />`;
+                if(d.wkts > 0) wktDots += `<circle cx="${x}" cy="${y}" r="2" fill="red" />`;
             });
             i2.runRateData.forEach((d, i) => {
                 let x = (i+1) * xStep;
-                let y = 150 - ((d.cum / Math.max(1,maxCumScore)) * 150);
+                let y = 150 - ((d.cum / maxCumScore) * 150);
                 wPts2 += `${x},${y} `;
-                if(d.wkts > 0) wktDots += `<circle cx="${x}" cy="${y}" r="3" fill="red" />`;
+                if(d.wkts > 0) wktDots += `<circle cx="${x}" cy="${y}" r="2" fill="red" />`;
             });
 
             let wormHTML = `
@@ -638,7 +800,10 @@
                     </tbody></table>
                     <h4 style="margin-top:10px">Bowling</h4>
                     <table><thead><tr><th>Bowler</th><th>O</th><th>R</th><th>W</th><th>Econ</th></tr></thead><tbody>
-                    ${Object.values(i1.bowlers).filter(b=>b.balls>0).map(b => `<tr><td>${b.name}</td><td>${Math.floor(b.balls/6)}.${b.balls%6}</td><td>${b.runs}</td><td>${b.wkts}</td><td>${(b.balls>0?(b.runs/(b.balls/6)).toFixed(2):'-')}</td></tr>`).join('')}
+                    ${Object.values(i1.bowlers).filter(b=>b.balls>0).map(b => {
+                        let ov = Math.floor(b.balls/6) + "." + (b.balls%6);
+                        return `<tr><td>${b.name}</td><td>${ov}</td><td>${b.runs}</td><td>${b.wkts}</td><td>${(b.runs/(b.balls/6)).toFixed(2)}</td></tr>`;
+                    }).join('')}
                     </tbody></table>
                 </div>
                 <div class="report-section">
@@ -650,7 +815,10 @@
                     </tbody></table>
                     <h4 style="margin-top:10px">Bowling</h4>
                     <table><thead><tr><th>Bowler</th><th>O</th><th>R</th><th>W</th><th>Econ</th></tr></thead><tbody>
-                    ${Object.values(i2.bowlers).filter(b=>b.balls>0).map(b => `<tr><td>${b.name}</td><td>${Math.floor(b.balls/6)}.${b.balls%6}</td><td>${b.runs}</td><td>${b.wkts}</td><td>${(b.balls>0?(b.runs/(b.balls/6)).toFixed(2):'-')}</td></tr>`).join('')}
+                    ${Object.values(i2.bowlers).filter(b=>b.balls>0).map(b => {
+                        let ov = Math.floor(b.balls/6) + "." + (b.balls%6);
+                        return `<tr><td>${b.name}</td><td>${ov}</td><td>${b.runs}</td><td>${b.wkts}</td><td>${(b.runs/(b.balls/6)).toFixed(2)}</td></tr>`;
+                    }).join('')}
                     </tbody></table>
                 </div>
             </div>
@@ -666,11 +834,10 @@
             document.getElementById('report-modal').style.display = 'flex';
         }
 
-        // ... Standard Helpers (Extras, Team Manager, etc.) ...
-        
+        // ... Standard Helpers ...
         function openExtrasModal(type) {
             document.getElementById('extras-type-val').value = type;
-            const title = type === 'wide' ? "Wide" : type === 'noball' ? "No Ball" : "Byes";
+            const title = type === 'wide' ? "Wide" : type === 'noball' ? "No Ball" : type === 'byes' ? "Byes" : "Leg Byes";
             document.getElementById('extras-title').innerText = title;
             const btn0 = document.getElementById('btn-ex-0');
             btn0.innerText = type === 'wide' ? "Standard (+1)" : "Standard (+0)";
@@ -688,16 +855,18 @@
             });
             document.getElementById('extras-modal').style.display = 'flex';
         }
+
         function confirmExtra(runs) {
             const type = document.getElementById('extras-type-val').value;
             let total = runs;
             if (type === 'wide') total += 1; 
             if (type === 'noball') total += 1; 
             if (type === 'byes') total += 1;
+            if (type === 'legbye') total += 1; 
             handleBall(total, type);
             closeModals();
         }
-        
+
         function openTeamManager() { document.getElementById('edit-team1-list').value = match.t1.join('\n'); document.getElementById('edit-team2-list').value = match.t2.join('\n'); document.getElementById('team-manager-modal').style.display = 'flex'; }
         function confirmTeamEdit() { const newT1 = document.getElementById('edit-team1-list').value.split('\n').map(n => n.trim()).filter(n => n); const newT2 = document.getElementById('edit-team2-list').value.split('\n').map(n => n.trim()).filter(n => n); const oldT1 = match.t1; for(let i=0; i<Math.max(oldT1.length, newT1.length); i++) { if(oldT1[i] && newT1[i] && oldT1[i] !== newT1[i]) renamePlayer(oldT1[i], newT1[i], 1); } const oldT2 = match.t2; for(let i=0; i<Math.max(oldT2.length, newT2.length); i++) { if(oldT2[i] && newT2[i] && oldT2[i] !== newT2[i]) renamePlayer(oldT2[i], newT2[i], 2); } match.t1 = newT1; match.t2 = newT2; closeModals(); recalc(); }
         function renamePlayer(oldName, newName, teamId) { live.history.forEach(h => { const isInn1 = (h.innings === 1) || (!h.innings && match.innings === 1); const isInn2 = (h.innings === 2) || (!h.innings && match.innings === 2); if (teamId === 1) { if (isInn1 && h.batter === oldName) h.batter = newName; if (isInn2 && h.bowler === oldName) h.bowler = newName; if (isInn1 && h.name === oldName) h.name = newName; } else { if (isInn1 && h.bowler === oldName) h.bowler = newName; if (isInn2 && h.batter === oldName) h.batter = newName; if (isInn2 && h.name === oldName) h.name = newName; } if (h.wkt) { if (h.wkt.outPlayer === oldName && ((teamId===1 && isInn1) || (teamId===2 && isInn2))) h.wkt.outPlayer = newName; if (h.wkt.fielder === oldName && ((teamId===1 && isInn2) || (teamId===2 && isInn1))) h.wkt.fielder = newName; } }); if (live.striker === oldName) live.striker = newName; if (live.ns === oldName) live.ns = newName; if (live.bowler === oldName) live.bowler = newName; }
@@ -713,88 +882,15 @@
         function confirmRetire() { const next = document.getElementById('sel-retire-next').value; live.batters[live.striker].status = 'Retired'; live.history.push({ event: 'new_bat', name: next }); closeModals(); recalc(); }
         function openManualSwap(role) { const sel = document.getElementById('sel-swap'); const pool = (role === 'bowler') ? (match.innings === 1 ? match.t2 : match.t1) : (match.innings === 1 ? match.t1 : match.t2); sel.innerHTML = pool.map(n => `<option value="${n}">${n}</option>`).join(''); document.getElementById('swap-role').value = role; document.getElementById('swap-modal').style.display = 'flex'; }
         function confirmSwap() { const role = document.getElementById('swap-role').value; const name = document.getElementById('sel-swap').value; if (role === 'striker' && name === live.striker) return closeModals(); if (role === 'ns' && name === live.ns) return closeModals(); if ((role === 'striker' && name === live.ns) || (role === 'ns' && name === live.striker)) return manualSwapStrike(); live.history.push({ event: 'replace', role, name }); closeModals(); recalc(); }
-        function checkRetire(b) { const active = Object.values(live.batters).filter(p => p.status === 'Active' || p.status === 'Yet to bat').length; if (active <= 2 || !b || b.balls === 0) return; if (b.stint === 1 && b.balls >= live.retireLimit) { setTimeout(() => { alert(b.name + " reached limit. Retire?"); }, 500); } if (b.stint === 2 && b.returnLimit !== null && live.ov >= b.returnLimit && live.balls === 0) { setTimeout(() => { alert(b.name + " return stint done. Retire?"); }, 500); } }
-        
-        function updateUI() {
-            document.getElementById('total-display').innerText = live.runs + " / " + live.wkts;
-            // Clean Last Over Display Logic
-            let dispOv = live.ov;
-            let dispBalls = live.balls;
-            if(live.ov >= match.overs && live.balls === 0) {
-                dispOv = match.overs; dispBalls = 0;
-            }
-            document.getElementById('overs-display').innerText = dispOv + "." + dispBalls;
-            document.getElementById('cur-bowler-display').innerText = live.bowler;
-            document.getElementById('striker-name').innerText = live.striker;
-            document.getElementById('ns-name').innerText = live.ns;
-            const bGone = (live.ov * 6) + live.balls;
-            const rr = bGone > 0 ? (live.runs / (bGone/6)).toFixed(2) : "0.00";
-            let projText = "";
-            if (match.innings === 1) {
-                projText = Math.round(live.runs + (rr * ((match.overs*6 - bGone)/6)));
-            } else {
-                if (live.runs >= match.target) {
-                    projText = "WIN!";
-                    document.getElementById('target-box').classList.add('passed');
-                    document.getElementById('target-val').innerText = "Passed";
-                } else {
-                    const need = match.target - live.runs;
-                    projText = `Need ${need}`;
-                    document.getElementById('target-val').innerText = match.target;
-                }
-            }
-            document.getElementById('projected-display').innerText = projText;
-            updatePlayerCard('striker', live.batters[live.striker]);
-            updatePlayerCard('ns', live.batters[live.ns]);
-            document.querySelector('#batter-table tbody').innerHTML = Object.values(live.batters).map(p => `<tr><td>${p.name}</td><td>${p.runs}</td><td>${p.balls}</td><td>${p[4]}</td><td>${p.status}</td></tr>`).join('');
-            document.querySelector('#bowler-table tbody').innerHTML = Object.values(live.bowlers).map(b => `<tr><td>${b.name}</td><td>${Math.floor(b.balls/6)}.${b.balls%6}</td><td>${b.runs}</td><td>${b.wkts}</td><td>${(b.balls>0?(b.runs/(b.balls/6)).toFixed(2):0)}</td></tr>`).join('');
-            document.getElementById('ball-list-ui').innerHTML = live.history.slice().reverse().map((h, i) => {
-                if (h.innings && h.innings !== match.innings) return ''; 
-                if (h.event !== 'ball') return '';
-                let desc = `Ball: ${h.runs} (${h.type})`;
-                if (h.wkt) desc = `<span style="color:red">WKT: ${h.wkt.type} ${h.wkt.fielder ? '('+h.wkt.fielder+')' : ''}</span>`;
-                return `<div class="history-item" onclick="openEditModal(${live.history.length-1-i})">${desc} ${h.zone ? '['+h.zone.substring(0,3)+']' : ''}</div>`;
-            }).join('');
-        }
-        function updatePlayerCard(id, p) { if (!p) return; document.getElementById(id + '-runs').innerText = p.runs; document.getElementById(id + '-balls').innerText = p.balls; const b = document.getElementById(id + '-badge'); if (p.stint === 2) { const left = p.returnLimit - live.ov; b.innerText = `Return: ${left}ov`; b.className = left <= 0 ? "balls-left-badge alert" : "balls-left-badge"; } else { const left = live.retireLimit - p.balls; b.innerText = `Limit: ${left}`; b.className = left <= 0 ? "balls-left-badge alert" : "balls-left-badge"; } }
+        function checkRetire(b) { if (!b || b.status !== 'Active') return; const active = Object.values(live.batters).filter(p => p.status === 'Active' || p.status === 'Yet to bat').length; if (active <= 2 || !b || b.balls === 0) return; if (b.stint === 1 && b.balls >= live.retireLimit) { setTimeout(() => { alert(b.name + " reached limit. Retire?"); }, 500); } if (b.stint === 2 && b.returnLimit !== null && live.ov >= b.returnLimit && live.balls === 0) { setTimeout(() => { alert(b.name + " return stint done. Retire?"); }, 500); } }
         function manualSwapStrike() { live.history.push({ event: 'swap' }); closeModals(); recalc(); }
         function undo() { live.history.pop(); recalc(); }
         function closeModals() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
         function selectZone(z) { for(let i=live.history.length-1; i>=0; i--) { if(live.history[i].event === 'ball') { live.history[i].zone = z; break; } } closeModals(); recalc(); }
         function openFieldModal() { document.getElementById('field-modal').style.display = 'flex'; }
-        
-        // BUG FIX: Ensure names are synced before swapping
-        function swapInnings() { 
-            match.target = live.runs + 1; 
-            match.innings = 2; 
-            document.getElementById('innings-notice').style.display = 'block'; 
-            document.getElementById('innings-notice').innerText = "Target: " + match.target; 
-            
-            // Sync Current Array to Text Area
-            document.getElementById('bat-list').value = match.t1.join('\n');
-            document.getElementById('bowl-list').value = match.t2.join('\n');
-
-            const oldB = document.getElementById('bat-list').value; 
-            document.getElementById('bat-list').value = document.getElementById('bowl-list').value; 
-            document.getElementById('bowl-list').value = oldB; 
-            
-            document.getElementById('scoring-screen').style.display = 'none'; 
-            document.getElementById('setup-screen').style.display = 'block'; 
-        }
-        
+        function swapInnings() { match.target = live.runs + 1; match.innings = 2; document.getElementById('innings-notice').style.display = 'block'; document.getElementById('innings-notice').innerText = "Target: " + match.target; document.getElementById('bat-list').value = match.t1.join('\n'); document.getElementById('bowl-list').value = match.t2.join('\n'); const oldB = document.getElementById('bat-list').value; document.getElementById('bat-list').value = document.getElementById('bowl-list').value; document.getElementById('bowl-list').value = oldB; document.getElementById('scoring-screen').style.display = 'none'; document.getElementById('setup-screen').style.display = 'block'; }
         function exportState() { const blob = new Blob([JSON.stringify({match, live})], {type: 'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'match.json'; a.click(); }
-        function importState(e) { 
-            const reader = new FileReader(); 
-            reader.onload = (ev) => { 
-                const d = JSON.parse(ev.target.result); 
-                match = d.match; live = d.live; 
-                // FIX: Hide setup BEFORE recalc, so recalc actually runs
-                document.getElementById('setup-screen').style.display='none'; 
-                document.getElementById('scoring-screen').style.display='grid'; 
-                recalc(); 
-            }; 
-            reader.readAsText(e.target.files[0]); 
-        }
+        function importState(e) { const reader = new FileReader(); reader.onload = (ev) => { const d = JSON.parse(ev.target.result); match = d.match; live = d.live; document.getElementById('setup-screen').style.display='none'; document.getElementById('scoring-screen').style.display='grid'; recalc(); }; reader.readAsText(e.target.files[0]); }
         function resetMatch() { if (confirm("Wipe?")) { localStorage.removeItem('pumas_save'); location.reload(); } }
         function saveMatch() { localStorage.setItem('pumas_save', JSON.stringify({ match, live })); alert("Match Saved Successfully!"); }
         function saveToMemory() { localStorage.setItem('pumas_save', JSON.stringify({ match, live })); const ind = document.getElementById('save-indicator'); ind.style.opacity = 1; setTimeout(() => ind.style.opacity = 0, 2000); }
