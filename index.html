@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pumas Scorer Pro v3.68 (Graph Print Fix)</title>
+    <title>Pumas Scorer Pro v3.71 (v3.67 Report + Delete Fix)</title>
     <style>
         :root {
             --primary: #1a73e8; --secondary: #fbbc04; --wicket: #d93025;
@@ -132,8 +132,7 @@
             .log-container { max-height: none !important; overflow: visible !important; border: none !important; }
             .report-section { page-break-inside: avoid; margin-bottom: 20px; }
             .no-print { display: none !important; }
-            .result-banner { -webkit-print-color-adjust: exact; }
-            .report-header { -webkit-print-color-adjust: exact; background-color: #eee !important; }
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
     </style>
 </head>
@@ -254,7 +253,7 @@
         <div id="report-modal" class="modal"><div class="modal-content large-modal">
             <h2 id="report-title" style="text-align:center">Match Report</h2>
             <div id="report-content"></div>
-            <div style="margin-top:20px; display:flex; gap:10px;">
+            <div class="no-print" style="margin-top:20px; display:flex; gap:10px;">
                 <button class="btn-primary" onclick="openPrintView()" style="flex:1">🖨 Open Print View</button>
                 <button class="btn-secondary" onclick="closeModals()" style="flex:1">Close</button>
             </div>
@@ -608,6 +607,12 @@
             else { const left = live.retireLimit - p.balls; b.innerText = `Limit: ${left}`; b.className = left <= 0 ? "balls-left-badge alert" : "balls-left-badge"; }
         }
 
+        function generateReport() {
+            // Function logic moved to openPrintView for cleaner code
+            document.getElementById('report-content').innerHTML = "Select 'Open Print View' to see and print the full match report.";
+            document.getElementById('report-modal').style.display = 'flex';
+        }
+
         function openPrintView() {
             function getInningsStats(innNum) {
                 const bTeam = innNum === 1 ? match.t1 : match.t2; const fieldTeam = innNum === 1 ? match.t2 : match.t1;
@@ -686,10 +691,10 @@
                 <html><head><title>Match Report</title><style>
                     body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
                     .header { text-align: center; font-size: 24px; font-weight: bold; margin-bottom: 10px; color: #1a73e8; }
-                    .result { text-align: center; font-size: 18px; margin-bottom: 30px; padding: 10px; background: #e8f5e9; border-radius: 5px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    .result { text-align: center; font-size: 18px; margin-bottom: 30px; padding: 10px; background: #e8f5e9; border-radius: 5px; }
                     table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
                     th, td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; font-size: 14px; }
-                    th { background-color: #f1f1f1; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    th { background-color: #f1f1f1; }
                     .section-title { font-size: 18px; font-weight: bold; margin-top: 30px; margin-bottom: 10px; border-bottom: 2px solid #333; padding-bottom: 5px; }
                     .graph-container { margin-bottom: 30px; }
                     @media print { body { padding: 0; } * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
@@ -855,8 +860,9 @@
         function openRetireModal() { 
             const sel = document.getElementById('sel-retire-next'); 
             const avail = getNextBatters(); 
+            // SHOW RUNS IN RETIRE MODAL
             sel.innerHTML = avail.map(p => { 
-                const label = `${p.name} (${p.runs}) [${p.status}]`; 
+                const label = `${p.name} (${p.runs} runs) [${p.status}]`; 
                 return `<option value="${p.name}">${label}</option>`; 
             }).join(''); 
             document.getElementById('retire-modal').style.display = 'flex'; 
