@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pumas Scorer Pro v3.81 (All Out Logic Fix)</title>
+    <title>Pumas Scorer Pro v3.82 (Retire UX & Time Limits)</title>
     <style>
         :root {
             --primary: #1a73e8; --secondary: #fbbc04; --wicket: #d93025;
@@ -296,11 +296,38 @@
             <button class="btn-secondary" onclick="closeModals()" style="width:100%">Cancel</button>
         </div></div>
 
+        <div id="swap-modal" class="modal"><div class="modal-content">
+            <h3 style="color:var(--primary); margin-top:0;">Player Action</h3>
+            
+            <div style="background:#f8f9fa; padding:15px; border-radius:8px; margin-bottom:15px; text-align:left;">
+                <p style="margin-top:0; font-weight:bold;">Option 1: Correct a Mistake</p>
+                <p style="font-size:0.8rem; color:#666; margin-bottom:10px;">Select the correct player for this position if the wrong person was selected.</p>
+                <select id="sel-swap" style="margin-bottom:10px;"></select>
+                <input type="hidden" id="swap-role">
+                <button class="btn-primary" onclick="confirmSwap()" style="width:100%;">Apply Correction</button>
+            </div>
+
+            <div id="swap-retire-container" style="background:#fff3e0; padding:15px; border-radius:8px; border:1px solid #ffe0b2; margin-bottom:15px; text-align:left;">
+                <p style="margin-top:0; font-weight:bold; color:#e65100;">Option 2: Retire Player</p>
+                <p style="font-size:0.8rem; color:#666; margin-bottom:10px;">Officially retire this batter from the innings.</p>
+                <button class="btn-retire" onclick="switchToRetire()" style="width:100%; background:var(--retire-color);">Retire This Batter</button>
+            </div>
+
+            <button class="btn-secondary" onclick="closeModals()" style="width:100%;">Cancel</button>
+        </div></div>
+
         <div id="edit-history-modal" class="modal"><div class="modal-content"><h3>Edit Event</h3><div id="edit-ball-container"><label>Runs:</label> <input type="number" id="edit-runs"><label>Type:</label><select id="edit-type"><option value="normal">Normal</option><option value="wide">Wide</option><option value="noball">No Ball</option><option value="byes">Byes</option><option value="legbye">Leg Byes</option><option value="wicket">Wicket</option></select><div id="edit-wkt-fields" style="display:none; background:#fee; padding:10px; border-radius:5px; margin-top:5px;"><label>Wicket Type:</label><select id="edit-wkt-type"><option value="Bowled">Bowled</option><option value="Caught">Caught</option><option value="Run Out">Run Out</option><option value="LBW">LBW</option><option value="Stumped">Stumped</option></select><label>Out Player:</label><select id="edit-wkt-out"></select></div><label>Batter:</label><select id="edit-batter"></select><label>Bowler:</label><select id="edit-bowler"></select></div><div id="edit-simple-container" style="display:none; margin-bottom:15px;"><label>Event Type:</label> <strong id="edit-simple-label"></strong><br><br><label>Player Name:</label><select id="edit-simple-name"></select></div><input type="hidden" id="edit-index"><div style="display:flex; flex-direction:column; gap:10px; margin-top:15px;"><button id="btn-save-edit" class="btn-primary" onclick="confirmEditBall()">Save Changes</button><button class="btn-danger" onclick="deleteHistoryEvent()">🗑 Delete This Entry</button><button class="btn-secondary" onclick="closeModals()">Cancel</button></div></div></div>
         <div id="team-manager-modal" class="modal"><div class="modal-content"><h3>Manage Teams</h3><div class="team-grid" style="grid-template-columns:1fr 1fr;"><div><label>Team 1</label><textarea id="edit-team1-list"></textarea></div><div><label>Team 2</label><textarea id="edit-team2-list"></textarea></div></div><button class="btn-primary" onclick="confirmTeamEdit()" style="width:100%">Save Changes</button><button class="btn-secondary" onclick="closeModals()" style="width:100%; margin-top:10px;">Cancel</button></div></div>
         <div id="bowler-modal" class="modal"><div class="modal-content"><h3>New Over</h3><p>Select Bowler:</p><select id="sel-bowler"></select><button class="btn-primary" onclick="confirmBowler()" style="width:100%">Start Over</button></div></div>
-        <div id="retire-modal" class="modal"><div class="modal-content"><h3>Retire Batter</h3><p>Select Incoming Batter:</p><select id="sel-retire-next"></select><button class="btn-primary" onclick="confirmRetire()" style="width:100%">Confirm Retire</button><button class="btn-secondary" onclick="closeModals()" style="width:100%; margin-top:10px;">Cancel</button></div></div>
-        <div id="swap-modal" class="modal"><div class="modal-content"><h3>Change Player</h3><select id="sel-swap"></select><input type="hidden" id="swap-role"><button class="btn-primary" onclick="confirmSwap()" style="width:100%">Update</button><button class="btn-secondary" onclick="closeModals()" style="width:100%; margin-top:10px;">Cancel</button></div></div>
+        
+        <div id="retire-modal" class="modal"><div class="modal-content">
+            <h3>Retire Batter</h3>
+            <p>Select Incoming Batter:</p>
+            <select id="sel-retire-next"></select>
+            <button class="btn-primary" onclick="confirmRetire()" style="width:100%; margin-top:10px;">Confirm Retire</button>
+            <button class="btn-secondary" onclick="closeModals()" style="width:100%; margin-top:10px;">Cancel</button>
+        </div></div>
+        
         <div id="edit-event-modal" class="modal"><div class="modal-content"><h3>Edit Event</h3><select id="edit-event-name"></select><input type="hidden" id="edit-event-index"><button class="btn-primary" onclick="confirmEditEvent()" style="width:100%">Save Changes</button><button class="btn-secondary" onclick="closeModals()" style="width:100%; margin-top:10px;">Cancel</button></div></div>
         <div id="field-modal" class="modal"><div class="modal-content"><h3>Zone</h3><div class="field-container"><div class="cricket-field"><div class="zone" onclick="selectZone('Third Man')" style="top:10%; left:20%;">TM</div><div class="zone" onclick="selectZone('Fine Leg')" style="top:10%; left:65%;">FL</div><div class="zone" onclick="selectZone('Point')" style="top:40%; left:5%;">P</div><div class="zone" onclick="selectZone('Cover')" style="top:65%; left:15%;">C</div><div class="zone" onclick="selectZone('Mid Off')" style="top:85%; left:35%;">MO</div><div class="zone" onclick="selectZone('Mid On')" style="top:85%; left:60%;">MN</div><div class="zone" onclick="selectZone('Mid Wicket')" style="top:65%; left:80%;">MW</div><div class="zone" onclick="selectZone('Square Leg')" style="top:40%; left:88%;">SL</div><div class="pitch"></div></div></div></div></div>
         <div id="save-indicator">Saved ✓</div>
@@ -310,6 +337,9 @@
         let match = { innings: 1, target: null, t1: [], t2: [], count1: 13, count2: 13, overs: 28, capt1: "", capt2: "" };
         let live = { runs: 0, wkts: 0, ov: 0, balls: 0, striker: "", ns: "", bowler: "", history: [], batters: {}, bowlers: {}, retireLimit: 13, gameOver: false, promptedOvers: [], pendingExtra: null };
         const rLimits = { 8: 21, 9: 18, 10: 16, 11: 15, 12: 14, 13: 13 };
+        
+        // Track who is being retired if triggered from the swap menu
+        let retiringRole = 'striker'; 
 
         document.getElementById('bat-list').addEventListener('input', () => {
             const n = document.getElementById('bat-list').value.split('\n').filter(x => x.trim()).length;
@@ -559,7 +589,6 @@
                 const totalBatters = battingTeam.length;
                 const isAllOut = live.wkts >= totalBatters - 1;
 
-                // FALLBACK NEXT BATTER LOGIC (Fix: Only trigger if not game over, not all out)
                 let needsNewBatter = false;
                 if (live.batters[live.striker] && (live.batters[live.striker].status === 'Out' || live.batters[live.striker].status === 'Retired')) needsNewBatter = true;
                 if (live.batters[live.ns] && (live.batters[live.ns].status === 'Out' || live.batters[live.ns].status === 'Retired')) needsNewBatter = true;
@@ -801,7 +830,6 @@
             const getPoints = (data) => {
                 let pts = "0,300 "; 
                 let xStep = 1000 / Math.max(10, match.overs); 
-                let dots = "";
                 data.forEach((d, i) => {
                     let x = (i+1) * xStep;
                     let y = 300 - ((d.cum / mScore) * 300);
@@ -976,13 +1004,9 @@
         
         function getNextBatters() { return Object.values(live.batters).sort((a,b) => { const score = (s) => { if (s === 'Yet to bat') return 0; if (s === 'Retired') return 1; return 2; }; return score(a.status) - score(b.status) || a.order - b.order; }); }
         
-        // FIXED FALLBACK NEXT BATTER MODAL
         function openNextBatterModal() { 
             const sel = document.getElementById('sel-next-bat-fix'); 
-            
-            // Only show valid batters (Yet to bat or Retired)
             const avail = getNextBatters().filter(p => p.status === 'Yet to bat' || p.status === 'Retired'); 
-            
             if(avail.length === 0) {
                 sel.innerHTML = `<option value="">-- No Batters Available --</option>`;
             } else {
@@ -993,18 +1017,17 @@
 
         function confirmNextBatterFix() { 
             const next = document.getElementById('sel-next-bat-fix').value; 
-            if (!next) return closeModals(); // Don't push empty event if no one available
+            if (!next) return closeModals(); 
             live.history.push({ event: 'new_bat', name: next, innings: match.innings }); 
             closeModals(); 
             recalc(); 
         }
 
-        // FIXED WICKET MODAL - RESETS VALUES ON OPEN
         function openWicketModal() { 
-            // Reset Values to Default
             document.getElementById('wkt-runs').value = "0";
             document.getElementById('wkt-type').value = "Bowled";
             document.getElementById('wkt-who').value = "striker";
+            document.getElementById('wkt-fielder').value = "";
 
             const avail = getNextBatters().filter(p => p.status === 'Yet to bat' || p.status === 'Retired');
             const nextBatContainer = document.getElementById('wkt-next-bat-container');
@@ -1032,7 +1055,8 @@
             closeModals(); recalc(); 
         }
         
-        function openRetireModal() { 
+        function openRetireModal(role = 'striker') { 
+            retiringRole = role;
             const sel = document.getElementById('sel-retire-next'); 
             const avail = getNextBatters().filter(p => p.status === 'Yet to bat' || p.status === 'Retired'); 
             if(avail.length === 0) {
@@ -1049,27 +1073,66 @@
         function confirmRetire() { 
             const next = document.getElementById('sel-retire-next').value; 
             if(!next) return closeModals();
-            live.batters[live.striker].status = 'Retired'; 
-            live.history.push({ event: 'retire', name: live.striker, innings: match.innings }); 
+            
+            const outName = retiringRole === 'striker' ? live.striker : live.ns;
+            
+            live.batters[outName].status = 'Retired'; 
+            live.history.push({ event: 'retire', name: outName, innings: match.innings }); 
             live.history.push({ event: 'new_bat', name: next, innings: match.innings }); 
             closeModals(); recalc(); 
         }
 
-        function openManualSwap(role) { const sel = document.getElementById('sel-swap'); const pool = (role === 'bowler') ? (match.innings === 1 ? match.t2 : match.t1) : (match.innings === 1 ? match.t1 : match.t2); sel.innerHTML = pool.map(n => `<option value="${n}">${n}</option>`).join(''); document.getElementById('swap-role').value = role; document.getElementById('swap-modal').style.display = 'flex'; }
-        function confirmSwap() { const role = document.getElementById('swap-role').value; const name = document.getElementById('sel-swap').value; if (role === 'striker' && name === live.striker) return closeModals(); if (role === 'ns' && name === live.ns) return closeModals(); if ((role === 'striker' && name === live.ns) || (role === 'ns' && name === live.striker)) return manualSwapStrike(); live.history.push({ event: 'replace', role, name, innings: match.innings }); closeModals(); recalc(); }
+        function openManualSwap(role) { 
+            const sel = document.getElementById('sel-swap'); 
+            const pool = (role === 'bowler') ? (match.innings === 1 ? match.t2 : match.t1) : (match.innings === 1 ? match.t1 : match.t2); 
+            sel.innerHTML = pool.map(n => `<option value="${n}">${n}</option>`).join(''); 
+            document.getElementById('swap-role').value = role; 
+            
+            if (role === 'bowler') {
+                document.getElementById('swap-retire-container').style.display = 'none';
+            } else {
+                document.getElementById('swap-retire-container').style.display = 'block';
+            }
+            document.getElementById('swap-modal').style.display = 'flex'; 
+        }
+
+        function confirmSwap() { 
+            const role = document.getElementById('swap-role').value; const name = document.getElementById('sel-swap').value; 
+            if (role === 'striker' && name === live.striker) return closeModals(); if (role === 'ns' && name === live.ns) return closeModals(); 
+            if ((role === 'striker' && name === live.ns) || (role === 'ns' && name === live.striker)) return manualSwapStrike(); 
+            live.history.push({ event: 'replace', role, name, innings: match.innings }); closeModals(); recalc(); 
+        }
+
+        function switchToRetire() {
+            const role = document.getElementById('swap-role').value;
+            closeModals();
+            openRetireModal(role);
+        }
+
         function checkRetire(b) { if (!b || b.status !== 'Active') return; const active = Object.values(live.batters).filter(p => p.status === 'Active' || p.status === 'Yet to bat').length; if (active <= 2 || !b || b.balls === 0) return; if (b.stint === 1 && b.balls >= live.retireLimit) { setTimeout(() => { alert(b.name + " reached limit. Retire?"); }, 500); } if (b.stint === 2 && b.returnLimit !== null && live.ov >= b.returnLimit && live.balls === 0) { setTimeout(() => { alert(b.name + " return stint done. Retire?"); }, 500); } }
         function manualSwapStrike() { live.history.push({ event: 'swap', innings: match.innings }); closeModals(); recalc(); }
         function undo() { live.history.pop(); recalc(); }
         function closeModals() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
         function selectZone(z) { for(let i=live.history.length-1; i>=0; i--) { if(live.history[i].event === 'ball') { live.history[i].zone = z; break; } } closeModals(); recalc(); }
         function openFieldModal() { document.getElementById('field-modal').style.display = 'flex'; }
+        
         function swapInnings() { 
+            let currentOvers = live.ov;
+            if (live.balls > 0) currentOvers++; 
+            
+            if (match.innings === 1 && currentOvers < match.overs && !live.gameOver) {
+                if (confirm(`Innings ended early at ${live.ov}.${live.balls} overs.\n\nDo you want to reduce the total match limit to ${currentOvers} overs for the 2nd Innings?`)) {
+                    match.overs = currentOvers;
+                }
+            }
+
             match.target = live.runs + 1; 
             match.innings = 2; 
             document.getElementById('innings-notice').style.display = 'block'; 
-            document.getElementById('innings-notice').innerText = "Target: " + match.target; 
+            document.getElementById('innings-notice').innerText = "Target: " + match.target + " (in " + match.overs + " overs)"; 
             openPreMatchModal(true); 
         }
+
         function exportState() { const blob = new Blob([JSON.stringify({match, live})], {type: 'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'match.json'; a.click(); }
         function importState(e) { const reader = new FileReader(); reader.onload = (ev) => { const d = JSON.parse(ev.target.result); match = d.match; live = d.live; document.getElementById('setup-screen').style.display='none'; document.getElementById('scoring-screen').style.display='grid'; recalc(); }; reader.readAsText(e.target.files[0]); }
         function resetMatch() { if (confirm("Wipe?")) { localStorage.removeItem('pumas_save'); location.reload(); } }
