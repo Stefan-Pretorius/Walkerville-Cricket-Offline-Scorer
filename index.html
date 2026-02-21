@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pumas Scorer Pro v3.82 (Retire UX & Time Limits)</title>
+    <title>Pumas Scorer Pro v3.83 (Wagon Wheels)</title>
     <style>
         :root {
             --primary: #1a73e8; --secondary: #fbbc04; --wicket: #d93025;
@@ -338,7 +338,6 @@
         let live = { runs: 0, wkts: 0, ov: 0, balls: 0, striker: "", ns: "", bowler: "", history: [], batters: {}, bowlers: {}, retireLimit: 13, gameOver: false, promptedOvers: [], pendingExtra: null };
         const rLimits = { 8: 21, 9: 18, 10: 16, 11: 15, 12: 14, 13: 13 };
         
-        // Track who is being retired if triggered from the swap menu
         let retiringRole = 'striker'; 
 
         document.getElementById('bat-list').addEventListener('input', () => {
@@ -771,6 +770,61 @@
             }
         }
 
+        // GENERATE WAGON WHEEL HTML
+        function buildShotMaps(battersObj, history) {
+            let html = '<div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap:15px; margin-bottom:20px;">';
+            
+            Object.keys(battersObj).forEach(bName => {
+                let zonesData = {};
+                let mappedRuns = 0;
+                history.forEach(h => {
+                    if(h.event === 'ball' && h.batter === bName && h.zone && h.runs > 0) {
+                        zonesData[h.zone] = (zonesData[h.zone] || 0) + h.runs;
+                        mappedRuns += h.runs;
+                    }
+                });
+                
+                if(mappedRuns === 0) {
+                    html += `<div style="text-align:center; padding:20px 10px; border:1px solid #eee; border-radius:8px; page-break-inside: avoid;">
+                                <strong style="font-size:0.9rem;">${bName}</strong><br><br><span style="color:#999; font-size:0.75rem;">No map captured</span>
+                            </div>`;
+                } else {
+                    const zc = {
+                        'Third Man': {x: 25, y: 20},
+                        'Fine Leg': {x: 75, y: 20},
+                        'Point': {x: 15, y: 50},
+                        'Cover': {x: 25, y: 80},
+                        'Mid Off': {x: 40, y: 90},
+                        'Mid On': {x: 60, y: 90},
+                        'Mid Wicket': {x: 75, y: 80},
+                        'Square Leg': {x: 85, y: 50}
+                    };
+                    let lines = ''; let dots = '';
+                    for(let z in zonesData) {
+                        let r = zonesData[z]; let c = zc[z];
+                        if(c) {
+                            lines += `<line x1="50" y1="50" x2="${c.x}" y2="${c.y}" stroke="#fff" stroke-width="2" opacity="0.8" />`;
+                            dots += `<circle cx="${c.x}" cy="${c.y}" r="6" fill="#fff" stroke="#333" stroke-width="1"/><text x="${c.x}" y="${c.y+3}" fill="#333" font-size="8" font-weight="bold" text-anchor="middle">${r}</text>`;
+                        }
+                    }
+                    html += `
+                    <div style="text-align:center; border:1px solid #eee; border-radius:8px; padding:10px; page-break-inside: avoid;">
+                        <strong style="font-size:0.9rem;">${bName}</strong>
+                        <div style="width:100px; height:100px; margin:10px auto;">
+                            <svg width="100" height="100" viewBox="0 0 100 100" style="background:#4CAF50; border-radius:50%; -webkit-print-color-adjust:exact; print-color-adjust:exact;">
+                                <circle cx="50" cy="50" r="48" fill="none" stroke="white" stroke-width="1" />
+                                <rect x="46" y="40" width="8" height="20" fill="#f0e68c" />
+                                ${lines} ${dots}
+                            </svg>
+                        </div>
+                        <div style="font-size:0.75rem; color:#666; font-weight:bold;">Mapped Runs: ${mappedRuns}</div>
+                    </div>`;
+                }
+            });
+            html += '</div>';
+            return html;
+        }
+
         function getInningsStats(innNum) {
             const bTeam = innNum === 1 ? match.t1 : match.t2; const fieldTeam = innNum === 1 ? match.t2 : match.t1;
             let stats = { batters: {}, bowlers: {}, score:0, wkts:0, ov:0, balls:0, history:[], runRateData: [], fow: [] };
@@ -881,13 +935,22 @@
                 <div class="result">${resText}</div>
                 <div class="graph-container"><h3>Worm Graph</h3>${wormHTML}</div>
                 <div class="graph-container"><h3>Manhattan Graph</h3>${manhattanHTML}</div>
+                
                 <div class="section-title">Innings 1: ${i1.score}/${i1.wkts}</div>
                 <table><thead><tr><th>Batter</th><th>Runs</th><th>Balls</th></tr></thead><tbody>${Object.values(i1.batters).map(b => `<tr><td>${b.name}${b.name===captBat1?' (C)':''}</td><td>${b.runs}</td><td>${b.balls}</td></tr>`).join('')}</tbody></table>
                 <h4>Bowling</h4><table><thead><tr><th>Bowler</th><th>Overs</th><th>Runs</th><th>Wickets</th></tr></thead><tbody>${Object.values(i1.bowlers).filter(b=>b.balls>0).map(b => `<tr><td>${b.name}${b.name===captBowl1?' (C)':''}</td><td>${Math.floor(b.balls/6)}.${b.balls%6}</td><td>${b.runs}</td><td>${b.wkts}</td></tr>`).join('')}</tbody></table>
-                <div class="section-title">Innings 2: ${i2.score}/${i2.wkts}</div>
+                
+                <div class="section-title">Shot Maps: Innings 1</div>
+                ${buildShotMaps(i1.batters, i1.history)}
+
+                <div class="section-title" style="page-break-before: always;">Innings 2: ${i2.score}/${i2.wkts}</div>
                 <table><thead><tr><th>Batter</th><th>Runs</th><th>Balls</th></tr></thead><tbody>${Object.values(i2.batters).map(b => `<tr><td>${b.name}${b.name===captBat2?' (C)':''}</td><td>${b.runs}</td><td>${b.balls}</td></tr>`).join('')}</tbody></table>
                 <h4>Bowling</h4><table><thead><tr><th>Bowler</th><th>Overs</th><th>Runs</th><th>Wickets</th></tr></thead><tbody>${Object.values(i2.bowlers).filter(b=>b.balls>0).map(b => `<tr><td>${b.name}${b.name===captBowl2?' (C)':''}</td><td>${Math.floor(b.balls/6)}.${b.balls%6}</td><td>${b.runs}</td><td>${b.wkts}</td></tr>`).join('')}</tbody></table>
-                <div class="section-title">Full Ball Log</div>
+                
+                <div class="section-title">Shot Maps: Innings 2</div>
+                ${buildShotMaps(i2.batters, i2.history)}
+
+                <div class="section-title" style="page-break-before: always;">Full Ball Log</div>
                 <div style="font-size: 12px; column-count: 2;">
                     <h4>Innings 1</h4>${i1.history.map((h,i)=> `<div>${i+1}. ${h.bowler} to ${h.batter}: <b>${h.runs}</b> ${h.type} ${h.wkt ? '(WKT)' : ''}</div>`).join('')}
                     <h4 style="margin-top:20px;">Innings 2</h4>${i2.history.map((h,i)=> `<div>${i+1}. ${h.bowler} to ${h.batter}: <b>${h.runs}</b> ${h.type} ${h.wkt ? '(WKT)' : ''}</div>`).join('')}
