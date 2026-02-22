@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pumas Scorer Pro v3.83 (Wagon Wheels)</title>
+    <title>Pumas Scorer Pro v3.85 (Safety Locks)</title>
     <style>
         :root {
             --primary: #1a73e8; --secondary: #fbbc04; --wicket: #d93025;
@@ -335,7 +335,7 @@
 
     <script>
         let match = { innings: 1, target: null, t1: [], t2: [], count1: 13, count2: 13, overs: 28, capt1: "", capt2: "" };
-        let live = { runs: 0, wkts: 0, ov: 0, balls: 0, striker: "", ns: "", bowler: "", history: [], batters: {}, bowlers: {}, retireLimit: 13, gameOver: false, promptedOvers: [], pendingExtra: null };
+        let live = { runs: 0, wkts: 0, ov: 0, balls: 0, striker: "", ns: "", bowler: "", history: [], batters: {}, bowlers: {}, retireLimit: 13, gameOver: false, promptedOvers: [], pendingExtra: null, notifiedEnd: false };
         const rLimits = { 8: 21, 9: 18, 10: 16, 11: 15, 12: 14, 13: 13 };
         
         let retiringRole = 'striker'; 
@@ -412,7 +412,7 @@
                  live.retireLimit = rLimits[t2.length] || 13;
             }
 
-            live.batters = {}; live.gameOver = false;
+            live.batters = {}; live.gameOver = false; live.notifiedEnd = false;
             let activeBatTeam = isInnings2 ? match.t2 : match.t1;
             let activeBowlTeam = isInnings2 ? match.t1 : match.t2;
 
@@ -481,8 +481,9 @@
         }
 
         function handleBall(r, type, wkt = null) {
-            if (live.gameOver) return alert("Match Ended. Please view report.");
-            if (live.ov >= match.overs) { alert("Innings Complete. Please Swap Innings."); return; }
+            if (live.gameOver) { 
+                if(!confirm("Match limit has been reached. Do you want to continue scoring anyway?")) return; 
+            }
             let isLegal = ['normal','wicket','byes','legbye'].includes(type);
             live.history.push({ event: 'ball', innings: match.innings, runs: r, type, batter: live.striker, bowler: live.bowler, legal: isLegal, wkt });
             recalc();
@@ -495,6 +496,7 @@
                 live.runs = 0; live.wkts = 0; live.ov = 0; live.balls = 0;
                 live.batters = {}; live.bowlers = {};
                 live.promptedOvers = []; 
+                live.gameOver = false; // Soft reset
                 
                 const battingTeam = match.innings === 1 ? match.t1 : match.t2;
                 const bowlingTeam = match.innings === 1 ? match.t2 : match.t1;
@@ -523,7 +525,13 @@
                     if (h.event === 'swap') { [s, ns] = [ns, s]; return; }
                     if (h.event === 'replace') { 
                         let oldName = (h.role === 'striker') ? s : ns;
-                        if (h.role !== 'bowler' && live.batters[oldName]) { if (live.batters[oldName].balls === 0) live.batters[oldName].status = 'Yet to bat'; }
+                        if (h.role !== 'bowler' && live.batters[oldName]) { 
+                            if (live.batters[oldName].balls === 0) {
+                                live.batters[oldName].status = 'Yet to bat'; 
+                            } else {
+                                live.batters[oldName].status = 'Retired'; 
+                            }
+                        }
                         if (h.role === 'striker') { s = h.name; if(live.batters[s]) live.batters[s].status = 'Active'; }
                         if (h.role === 'ns') { ns = h.name; if(live.batters[ns]) live.batters[ns].status = 'Active'; }
                         if (h.role === 'bowler') live.bowler = h.name;
@@ -592,16 +600,24 @@
                 if (live.batters[live.striker] && (live.batters[live.striker].status === 'Out' || live.batters[live.striker].status === 'Retired')) needsNewBatter = true;
                 if (live.batters[live.ns] && (live.batters[live.ns].status === 'Out' || live.batters[live.ns].status === 'Retired')) needsNewBatter = true;
 
-                if (needsNewBatter && !live.gameOver && !isAllOut) {
+                if (needsNewBatter && !isAllOut) {
                     openNextBatterModal();
                 }
 
-                if (isAllOut) {
-                    if (match.innings === 1 && !live.gameOver) { if(confirm("All Out! Innings Over. Swap?")) swapInnings(); } 
-                    else if (match.innings === 2 && !live.gameOver) { if(confirm("All Out! Match Complete. View Report?")) openPrintView(); live.gameOver = true; }
-                } else if (live.ov >= match.overs && !live.gameOver) {
-                    if (match.innings === 1) if(confirm("Overs Complete. Swap?")) swapInnings();
-                    if (match.innings === 2) { if(confirm("Match Complete (Overs). View Report?")) openPrintView(); live.gameOver = true; }
+                // SOFT GAME OVER LOGIC
+                if (isAllOut || live.ov >= match.overs) {
+                    live.gameOver = true;
+                    if (match.innings === 1) {
+                        if (live.notifiedEnd !== live.history.length) {
+                            live.notifiedEnd = live.history.length;
+                            setTimeout(() => { if(confirm("Innings 1 Complete! Swap teams?")) swapInnings(); }, 500);
+                        }
+                    } else if (match.innings === 2) {
+                        if (live.notifiedEnd !== live.history.length) {
+                            live.notifiedEnd = live.history.length;
+                            setTimeout(() => { if(confirm("Match Complete! View Report?")) openPrintView(); }, 500);
+                        }
+                    }
                 }
 
                 if (overEnded && !live.gameOver && document.getElementById('scoring-screen').style.display !== 'none') {
@@ -770,7 +786,6 @@
             }
         }
 
-        // GENERATE WAGON WHEEL HTML
         function buildShotMaps(battersObj, history) {
             let html = '<div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap:15px; margin-bottom:20px;">';
             
@@ -1180,11 +1195,20 @@
         function openFieldModal() { document.getElementById('field-modal').style.display = 'flex'; }
         
         function swapInnings() { 
+            if (match.innings === 2) {
+                alert("You are already in the 2nd Innings!");
+                return;
+            }
+
+            if (!confirm("Are you sure you want to officially end Innings 1 and SWAP to Innings 2?\n\n(This will finalize the target score.)")) {
+                return;
+            }
+
             let currentOvers = live.ov;
             if (live.balls > 0) currentOvers++; 
             
-            if (match.innings === 1 && currentOvers < match.overs && !live.gameOver) {
-                if (confirm(`Innings ended early at ${live.ov}.${live.balls} overs.\n\nDo you want to reduce the total match limit to ${currentOvers} overs for the 2nd Innings?`)) {
+            if (currentOvers < match.overs && !live.gameOver) {
+                if (confirm(`Innings 1 ended early at ${live.ov}.${live.balls} overs.\n\nDo you want to reduce the total match limit to ${currentOvers} overs for the 2nd Innings?`)) {
                     match.overs = currentOvers;
                 }
             }
