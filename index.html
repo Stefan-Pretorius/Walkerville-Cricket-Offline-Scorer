@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pumas Scorer Pro v3.85 (Safety Locks)</title>
+    <title>Pumas Scorer Pro v3.86 (Undo Swap & Advanced Analytics)</title>
     <style>
         :root {
             --primary: #1a73e8; --secondary: #fbbc04; --wicket: #d93025;
@@ -232,7 +232,7 @@
                 </div>
 
                 <div style="display:flex; gap:10px;">
-                    <button onclick="swapInnings()" class="btn-secondary" style="flex:1">Swap</button>
+                    <button id="btn-swap-innings" onclick="handleSwapClick()" class="btn-secondary" style="flex:1">Swap</button>
                     <button onclick="openPrintView()" class="btn-primary" style="flex:1">📊 Report</button>
                     <button onclick="saveMatch()" class="btn-save" style="flex:1">Save</button>
                     <button onclick="exportState()" style="flex:1">Export</button>
@@ -334,7 +334,7 @@
     </div>
 
     <script>
-        let match = { innings: 1, target: null, t1: [], t2: [], count1: 13, count2: 13, overs: 28, capt1: "", capt2: "" };
+        let match = { innings: 1, target: null, t1: [], t2: [], count1: 13, count2: 13, overs: 28, capt1: "", capt2: "", originalOvers: null };
         let live = { runs: 0, wkts: 0, ov: 0, balls: 0, striker: "", ns: "", bowler: "", history: [], batters: {}, bowlers: {}, retireLimit: 13, gameOver: false, promptedOvers: [], pendingExtra: null, notifiedEnd: false };
         const rLimits = { 8: 21, 9: 18, 10: 16, 11: 15, 12: 14, 13: 13 };
         
@@ -604,7 +604,6 @@
                     openNextBatterModal();
                 }
 
-                // SOFT GAME OVER LOGIC
                 if (isAllOut || live.ov >= match.overs) {
                     live.gameOver = true;
                     if (match.innings === 1) {
@@ -654,6 +653,18 @@
                     else { const need = match.target - live.runs; projText = `Need ${need}`; document.getElementById('target-val').innerText = match.target; }
                 }
                 document.getElementById('projected-display').innerText = projText;
+
+                // Update Swap Button Logic
+                const btnSwap = document.getElementById('btn-swap-innings');
+                if (match.innings === 2) {
+                    btnSwap.innerText = "Undo Swap";
+                    btnSwap.style.background = "#d93025";
+                    btnSwap.style.color = "white";
+                } else {
+                    btnSwap.innerText = "Swap";
+                    btnSwap.style.background = "var(--secondary)";
+                    btnSwap.style.color = "black";
+                }
                 
                 if(live.striker && live.batters[live.striker]) updatePlayerCard('striker', live.batters[live.striker]);
                 if(live.ns && live.batters[live.ns]) updatePlayerCard('ns', live.batters[live.ns]);
@@ -788,10 +799,8 @@
 
         function buildShotMaps(battersObj, history) {
             let html = '<div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap:15px; margin-bottom:20px;">';
-            
             Object.keys(battersObj).forEach(bName => {
-                let zonesData = {};
-                let mappedRuns = 0;
+                let zonesData = {}; let mappedRuns = 0;
                 history.forEach(h => {
                     if(h.event === 'ball' && h.batter === bName && h.zone && h.runs > 0) {
                         zonesData[h.zone] = (zonesData[h.zone] || 0) + h.runs;
@@ -804,16 +813,7 @@
                                 <strong style="font-size:0.9rem;">${bName}</strong><br><br><span style="color:#999; font-size:0.75rem;">No map captured</span>
                             </div>`;
                 } else {
-                    const zc = {
-                        'Third Man': {x: 25, y: 20},
-                        'Fine Leg': {x: 75, y: 20},
-                        'Point': {x: 15, y: 50},
-                        'Cover': {x: 25, y: 80},
-                        'Mid Off': {x: 40, y: 90},
-                        'Mid On': {x: 60, y: 90},
-                        'Mid Wicket': {x: 75, y: 80},
-                        'Square Leg': {x: 85, y: 50}
-                    };
+                    const zc = { 'Third Man': {x: 25, y: 20}, 'Fine Leg': {x: 75, y: 20}, 'Point': {x: 15, y: 50}, 'Cover': {x: 25, y: 80}, 'Mid Off': {x: 40, y: 90}, 'Mid On': {x: 60, y: 90}, 'Mid Wicket': {x: 75, y: 80}, 'Square Leg': {x: 85, y: 50} };
                     let lines = ''; let dots = '';
                     for(let z in zonesData) {
                         let r = zonesData[z]; let c = zc[z];
@@ -840,27 +840,65 @@
             return html;
         }
 
+        // ADVANCED ANALYTICS GENERATORS
+        function buildFowTable(stats) {
+            if(stats.fow.length === 0 && stats.score === 0) return "<p style='font-size:12px; color:#666;'>No wickets fell.</p>";
+            let html = `<table><thead><tr><th>Wicket</th><th>Score</th><th>Over</th><th>P'ship Runs</th></tr></thead><tbody>`;
+            let prev = 0;
+            stats.fow.forEach((f, i) => {
+                html += `<tr><td>${i+1}</td><td>${f.score}</td><td>${f.ov}.${f.ball}</td><td>${f.score - prev}</td></tr>`;
+                prev = f.score;
+            });
+            if (stats.score > prev) html += `<tr><td>Unbeaten</td><td>${stats.score}</td><td>${stats.ov}.${stats.balls}</td><td>${stats.score - prev}</td></tr>`;
+            html += `</tbody></table>`;
+            return html;
+        }
+
+        function buildOverTable(stats) {
+            let html = `<table><thead><tr><th>Ov</th><th>Runs</th><th>Total</th><th>Wkts</th><th>RR</th></tr></thead><tbody>`;
+            stats.runRateData.forEach(d => { html += `<tr><td>${d.over}</td><td>${d.runs}</td><td>${d.cum}</td><td>${d.wkts}</td><td>${(d.cum/d.over).toFixed(2)}</td></tr>`; });
+            html += `</tbody></table>`;
+            return html;
+        }
+
+        function getExtrasHtml(extras) {
+            return `<p style="font-size:14px;"><b>Total Extras: ${extras.total}</b><br><span style="color:#666;">(Wides: ${extras.w}, No Balls: ${extras.nb}, Byes: ${extras.b}, Leg Byes: ${extras.lb})</span></p>`;
+        }
+
         function getInningsStats(innNum) {
             const bTeam = innNum === 1 ? match.t1 : match.t2; const fieldTeam = innNum === 1 ? match.t2 : match.t1;
-            let stats = { batters: {}, bowlers: {}, score:0, wkts:0, ov:0, balls:0, history:[], runRateData: [], fow: [] };
+            let stats = { batters: {}, bowlers: {}, score:0, wkts:0, ov:0, balls:0, history:[], runRateData: [], fow: [], extras: {w:0, nb:0, b:0, lb:0, total:0} };
             if(!bTeam || !fieldTeam) return stats;
-            bTeam.forEach(n => stats.batters[n] = { name: n, runs:0, balls:0, status:'DNB' }); fieldTeam.forEach(n => stats.bowlers[n] = { name: n, runs:0, wkts:0, balls:0 });
+            bTeam.forEach(n => stats.batters[n] = { name: n, runs:0, balls:0, dots:0, status:'DNB' }); fieldTeam.forEach(n => stats.bowlers[n] = { name: n, runs:0, wkts:0, balls:0 });
+            
             const evts = live.history.filter(h => {
                 let evInnings = h.innings;
                 if (evInnings === undefined) { if (stats.history.length === 0) evInnings = 1; else { for (let k = live.history.indexOf(h) - 1; k >= 0; k--) { if (live.history[k].innings !== undefined) { evInnings = live.history[k].innings; break; } } if (evInnings === undefined) evInnings = 1; } }
                 return evInnings === innNum;
             });
+            
             let phys = 0, overRuns = 0, cumRuns = 0;
             evts.forEach(h => {
                 if (h.event !== 'ball') return;
                 stats.history.push(h); let r = h.runs || 0; stats.score += r; overRuns += r; cumRuns += r;
+                
+                if(h.type === 'wide') stats.extras.w += (h.runs || 1);
+                if(h.type === 'noball') stats.extras.nb += (h.runs || 1);
+                if(h.type === 'byes') stats.extras.b += (h.runs || 0);
+                if(h.type === 'legbye') stats.extras.lb += (h.runs || 0);
+
                 if(h.wkt) { stats.wkts++; const out = h.wkt.outPlayer || h.batter; if(stats.batters[out]) stats.batters[out].status = 'Out'; stats.fow.push({ score: cumRuns, wkts: stats.wkts, ov: stats.ov, ball: stats.balls }); }
                 let isLast = (stats.ov === match.overs - 1);
-                if (!stats.batters[h.batter]) stats.batters[h.batter] = { name: h.batter, runs: 0, balls: 0, status: 'Active' };
+                if (!stats.batters[h.batter]) stats.batters[h.batter] = { name: h.batter, runs: 0, balls: 0, dots:0, status: 'Active' };
                 if(stats.batters[h.batter]) {
                     if(stats.batters[h.batter].status === 'DNB') stats.batters[h.batter].status = 'Active';
                     if (!isLast) stats.batters[h.batter].balls++; else if(h.legal) stats.batters[h.batter].balls++;
-                    if(['normal','wicket'].includes(h.type)) stats.batters[h.batter].runs += r; else if(h.type === 'noball') { let offBat = r - 1; if(offBat > 0) stats.batters[h.batter].runs += offBat; }
+                    if(['normal','wicket'].includes(h.type)) {
+                        stats.batters[h.batter].runs += r;
+                        if(r === 0) stats.batters[h.batter].dots++;
+                    } else if(h.type === 'noball') { 
+                        let offBat = r - 1; if(offBat > 0) stats.batters[h.batter].runs += offBat; else stats.batters[h.batter].dots++;
+                    }
                 }
                 if(stats.bowlers[h.bowler]) { stats.bowlers[h.bowler].runs += r; if(h.wkt) stats.bowlers[h.bowler].wkts++; if (!isLast) stats.bowlers[h.bowler].balls++; else if (h.legal) stats.bowlers[h.bowler].balls++; }
                 phys++; let end = false;
@@ -871,6 +909,7 @@
                 }
             });
             if(stats.balls > 0 || phys > 0) stats.runRateData.push({ over: stats.ov + 1, runs: overRuns, cum: cumRuns, wkts: 0 });
+            stats.extras.total = stats.extras.w + stats.extras.nb + stats.extras.b + stats.extras.lb;
             return stats;
         }
 
@@ -944,6 +983,7 @@
                     th { background-color: #f1f1f1; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                     .section-title { font-size: 18px; font-weight: bold; margin-top: 30px; margin-bottom: 10px; border-bottom: 2px solid #333; padding-bottom: 5px; }
                     .graph-container { margin-bottom: 30px; page-break-inside: avoid; }
+                    .insights-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; page-break-inside: avoid;}
                     @media print { body { padding: 0; } * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
                 </style></head><body>
                 <div class="header">Match Report</div>
@@ -952,17 +992,43 @@
                 <div class="graph-container"><h3>Manhattan Graph</h3>${manhattanHTML}</div>
                 
                 <div class="section-title">Innings 1: ${i1.score}/${i1.wkts}</div>
-                <table><thead><tr><th>Batter</th><th>Runs</th><th>Balls</th></tr></thead><tbody>${Object.values(i1.batters).map(b => `<tr><td>${b.name}${b.name===captBat1?' (C)':''}</td><td>${b.runs}</td><td>${b.balls}</td></tr>`).join('')}</tbody></table>
+                <table><thead><tr><th>Batter</th><th>Runs</th><th>Balls</th><th>SR</th><th>Dots</th></tr></thead><tbody>${Object.values(i1.batters).map(b => `<tr><td>${b.name}${b.name===captBat1?' (C)':''}</td><td>${b.runs}</td><td>${b.balls}</td><td>${b.balls>0?((b.runs/b.balls)*100).toFixed(1):'0.0'}</td><td>${b.dots}</td></tr>`).join('')}</tbody></table>
                 <h4>Bowling</h4><table><thead><tr><th>Bowler</th><th>Overs</th><th>Runs</th><th>Wickets</th></tr></thead><tbody>${Object.values(i1.bowlers).filter(b=>b.balls>0).map(b => `<tr><td>${b.name}${b.name===captBowl1?' (C)':''}</td><td>${Math.floor(b.balls/6)}.${b.balls%6}</td><td>${b.runs}</td><td>${b.wkts}</td></tr>`).join('')}</tbody></table>
                 
-                <div class="section-title">Shot Maps: Innings 1</div>
+                <div class="insights-grid">
+                    <div>
+                        <div class="section-title" style="margin-top:0;">Over-by-Over</div>
+                        ${buildOverTable(i1)}
+                    </div>
+                    <div>
+                        <div class="section-title" style="margin-top:0;">Partnerships</div>
+                        ${buildFowTable(i1)}
+                        <div class="section-title">Extras Breakdown</div>
+                        ${getExtrasHtml(i1.extras)}
+                    </div>
+                </div>
+
+                <div class="section-title" style="page-break-before: always;">Shot Maps: Innings 1</div>
                 ${buildShotMaps(i1.batters, i1.history)}
 
                 <div class="section-title" style="page-break-before: always;">Innings 2: ${i2.score}/${i2.wkts}</div>
-                <table><thead><tr><th>Batter</th><th>Runs</th><th>Balls</th></tr></thead><tbody>${Object.values(i2.batters).map(b => `<tr><td>${b.name}${b.name===captBat2?' (C)':''}</td><td>${b.runs}</td><td>${b.balls}</td></tr>`).join('')}</tbody></table>
+                <table><thead><tr><th>Batter</th><th>Runs</th><th>Balls</th><th>SR</th><th>Dots</th></tr></thead><tbody>${Object.values(i2.batters).map(b => `<tr><td>${b.name}${b.name===captBat2?' (C)':''}</td><td>${b.runs}</td><td>${b.balls}</td><td>${b.balls>0?((b.runs/b.balls)*100).toFixed(1):'0.0'}</td><td>${b.dots}</td></tr>`).join('')}</tbody></table>
                 <h4>Bowling</h4><table><thead><tr><th>Bowler</th><th>Overs</th><th>Runs</th><th>Wickets</th></tr></thead><tbody>${Object.values(i2.bowlers).filter(b=>b.balls>0).map(b => `<tr><td>${b.name}${b.name===captBowl2?' (C)':''}</td><td>${Math.floor(b.balls/6)}.${b.balls%6}</td><td>${b.runs}</td><td>${b.wkts}</td></tr>`).join('')}</tbody></table>
                 
-                <div class="section-title">Shot Maps: Innings 2</div>
+                <div class="insights-grid">
+                    <div>
+                        <div class="section-title" style="margin-top:0;">Over-by-Over</div>
+                        ${buildOverTable(i2)}
+                    </div>
+                    <div>
+                        <div class="section-title" style="margin-top:0;">Partnerships</div>
+                        ${buildFowTable(i2)}
+                        <div class="section-title">Extras Breakdown</div>
+                        ${getExtrasHtml(i2.extras)}
+                    </div>
+                </div>
+
+                <div class="section-title" style="page-break-before: always;">Shot Maps: Innings 2</div>
                 ${buildShotMaps(i2.batters, i2.history)}
 
                 <div class="section-title" style="page-break-before: always;">Full Ball Log</div>
@@ -1194,11 +1260,13 @@
         function selectZone(z) { for(let i=live.history.length-1; i>=0; i--) { if(live.history[i].event === 'ball') { live.history[i].zone = z; break; } } closeModals(); recalc(); }
         function openFieldModal() { document.getElementById('field-modal').style.display = 'flex'; }
         
+        function handleSwapClick() {
+            if (match.innings === 1) swapInnings();
+            else undoSwap();
+        }
+
         function swapInnings() { 
-            if (match.innings === 2) {
-                alert("You are already in the 2nd Innings!");
-                return;
-            }
+            if (match.innings === 2) return;
 
             if (!confirm("Are you sure you want to officially end Innings 1 and SWAP to Innings 2?\n\n(This will finalize the target score.)")) {
                 return;
@@ -1207,6 +1275,8 @@
             let currentOvers = live.ov;
             if (live.balls > 0) currentOvers++; 
             
+            match.originalOvers = match.overs;
+
             if (currentOvers < match.overs && !live.gameOver) {
                 if (confirm(`Innings 1 ended early at ${live.ov}.${live.balls} overs.\n\nDo you want to reduce the total match limit to ${currentOvers} overs for the 2nd Innings?`)) {
                     match.overs = currentOvers;
@@ -1218,6 +1288,24 @@
             document.getElementById('innings-notice').style.display = 'block'; 
             document.getElementById('innings-notice').innerText = "Target: " + match.target + " (in " + match.overs + " overs)"; 
             openPreMatchModal(true); 
+        }
+
+        function undoSwap() {
+            if (!confirm("Are you sure you want to UNDO the swap?\n\nThis will delete any Innings 2 data and take you safely back to Innings 1!")) return;
+            
+            match.innings = 1;
+            match.target = null;
+            if(match.originalOvers) match.overs = match.originalOvers;
+            
+            live.history = live.history.filter(h => {
+                let evInnings = h.innings;
+                return evInnings === 1 || evInnings === undefined; 
+            });
+            
+            live.gameOver = false;
+            live.notifiedEnd = false;
+            
+            recalc();
         }
 
         function exportState() { const blob = new Blob([JSON.stringify({match, live})], {type: 'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'match.json'; a.click(); }
