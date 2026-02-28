@@ -2,8 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pumas Scorer Pro v3.86 (Undo Swap & Advanced Analytics)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Walkerville Pumas Scorer Pro v3.88</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1a73e8">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
     <style>
         :root {
             --primary: #1a73e8; --secondary: #fbbc04; --wicket: #d93025;
@@ -23,6 +28,13 @@
         textarea { width: 100%; height: 200px; padding: 12px; border-radius: 8px; border: 1px solid #ccc; resize: none; font-family: inherit; font-size: 0.9rem; }
         
         .scoring-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+        
+        /* MOBILE RESPONSIVENESS FIXES */
+        @media (max-width: 768px) { 
+            .scoring-grid { grid-template-columns: 1fr; } 
+            .history-sidebar { height: 350px !important; border: 2px solid #eee; margin-top: 10px; }
+        }
+        
         .scorecard-header h1 { font-size: 3.5rem; color: var(--primary); text-align: center; margin: 0; }
         .header-details { display: flex; justify-content: space-around; background: #f8f9fa; padding: 12px; border-radius: 8px; margin-top: 10px; font-weight: bold; }
         .target-ui { background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; padding: 5px 10px; border-radius: 4px; }
@@ -122,7 +134,7 @@
 <body>
     <div id="app" class="main-container">
         <div id="setup-screen" class="card setup-layout">
-            <h2 style="color:var(--primary); text-align:center;">Match Registration</h2>
+            <h2 style="color:var(--primary); text-align:center;">Walkerville Pumas Scorer Pro</h2>
             <div id="innings-notice" style="background:#e3f2fd; padding:10px; border-radius:8px; margin-bottom:15px; display:none;"></div>
             
             <p style="font-size:0.85rem; color:#d93025; text-align:center; margin-bottom:15px;">
@@ -151,6 +163,7 @@
             <button class="btn-primary" onclick="openPreMatchModal(false)" style="width:100%">Start Innings</button>
             <input type="file" id="import-file" style="display:none" onchange="importState(event)">
             <button onclick="document.getElementById('import-file').click()" class="btn-secondary" style="width:100%; margin-top:10px;">📂 Import Save</button>
+            <button onclick="hardResetApp()" style="width:100%; margin-top:20px; background:#f44336; color:white; border:none; padding:10px; border-radius:8px; cursor:pointer;">🔄 Force App Update (Clear Cache)</button>
         </div>
 
         <div id="scoring-screen" class="scoring-grid" style="display:none;">
@@ -239,6 +252,7 @@
                     <button onclick="resetMatch()" class="btn-danger" style="flex:1">Reset</button>
                 </div>
             </div>
+            
             <div class="history-sidebar card">
                 <h3>Ball History</h3>
                 <div id="ball-list-ui"></div>
@@ -251,22 +265,14 @@
 
         <div id="pre-match-modal" class="modal"><div class="modal-content">
             <h3 style="color:var(--primary); margin-top:0;">Match Details</h3>
-            
             <div id="pm-capt-container" style="display:block;">
-                <p>Team 1 Captain:</p>
-                <select id="pm-capt-bat"></select>
-                <p>Team 2 Captain:</p>
-                <select id="pm-capt-bowl"></select>
+                <p>Team 1 Captain:</p><select id="pm-capt-bat"></select>
+                <p>Team 2 Captain:</p><select id="pm-capt-bowl"></select>
                 <hr style="margin:20px 0; border:0; border-top:1px dashed #ccc;">
             </div>
-
-            <p><strong>Opening Striker (Facing):</strong></p>
-            <select id="pm-striker"></select>
-            <p><strong>Opening Non-Striker:</strong></p>
-            <select id="pm-ns"></select>
-            <p><strong>Opening Bowler:</strong></p>
-            <select id="pm-bowler"></select>
-            
+            <p><strong>Opening Striker (Facing):</strong></p><select id="pm-striker"></select>
+            <p><strong>Opening Non-Striker:</strong></p><select id="pm-ns"></select>
+            <p><strong>Opening Bowler:</strong></p><select id="pm-bowler"></select>
             <button class="btn-primary" onclick="confirmPreMatch()" style="width:100%; margin-top:20px;">Play Ball!</button>
             <button class="btn-secondary" onclick="closeModals()" style="width:100%; margin-top:10px;">Cancel</button>
         </div></div>
@@ -287,18 +293,15 @@
             <p>Type:</p><select id="wkt-type"><option value="Bowled">Bowled</option><option value="Caught">Caught</option><option value="LBW">LBW</option><option value="Run Out">Run Out</option><option value="Stumped">Stumped</option></select>
             <p>Runs Completed (if Run Out):</p><input type="number" id="wkt-runs" value="0" min="0">
             <p>Fielder:</p><select id="wkt-fielder"><option value="">-- None/Bowler --</option></select>
-            
             <div id="wkt-next-bat-container">
                 <p>Next Batter:</p><select id="sel-next-bat"></select>
             </div>
-            
             <button class="btn-primary" onclick="confirmWicket()" style="width:100%; margin-top:15px; margin-bottom:10px;">Confirm</button>
             <button class="btn-secondary" onclick="closeModals()" style="width:100%">Cancel</button>
         </div></div>
 
         <div id="swap-modal" class="modal"><div class="modal-content">
             <h3 style="color:var(--primary); margin-top:0;">Player Action</h3>
-            
             <div style="background:#f8f9fa; padding:15px; border-radius:8px; margin-bottom:15px; text-align:left;">
                 <p style="margin-top:0; font-weight:bold;">Option 1: Correct a Mistake</p>
                 <p style="font-size:0.8rem; color:#666; margin-bottom:10px;">Select the correct player for this position if the wrong person was selected.</p>
@@ -306,13 +309,11 @@
                 <input type="hidden" id="swap-role">
                 <button class="btn-primary" onclick="confirmSwap()" style="width:100%;">Apply Correction</button>
             </div>
-
             <div id="swap-retire-container" style="background:#fff3e0; padding:15px; border-radius:8px; border:1px solid #ffe0b2; margin-bottom:15px; text-align:left;">
                 <p style="margin-top:0; font-weight:bold; color:#e65100;">Option 2: Retire Player</p>
                 <p style="font-size:0.8rem; color:#666; margin-bottom:10px;">Officially retire this batter from the innings.</p>
                 <button class="btn-retire" onclick="switchToRetire()" style="width:100%; background:var(--retire-color);">Retire This Batter</button>
             </div>
-
             <button class="btn-secondary" onclick="closeModals()" style="width:100%;">Cancel</button>
         </div></div>
 
@@ -654,7 +655,6 @@
                 }
                 document.getElementById('projected-display').innerText = projText;
 
-                // Update Swap Button Logic
                 const btnSwap = document.getElementById('btn-swap-innings');
                 if (match.innings === 2) {
                     btnSwap.innerText = "Undo Swap";
@@ -840,7 +840,6 @@
             return html;
         }
 
-        // ADVANCED ANALYTICS GENERATORS
         function buildFowTable(stats) {
             if(stats.fow.length === 0 && stats.score === 0) return "<p style='font-size:12px; color:#666;'>No wickets fell.</p>";
             let html = `<table><thead><tr><th>Wicket</th><th>Score</th><th>Over</th><th>P'ship Runs</th></tr></thead><tbody>`;
@@ -1314,6 +1313,57 @@
         function saveMatch() { localStorage.setItem('pumas_save', JSON.stringify({ match, live })); alert("Match Saved Successfully!"); }
         function saveToMemory() { localStorage.setItem('pumas_save', JSON.stringify({ match, live })); const ind = document.getElementById('save-indicator'); ind.style.opacity = 1; setTimeout(() => ind.style.opacity = 0, 2000); }
         window.onload = () => { const s = localStorage.getItem('pumas_save'); if (s && confirm("Resume Match?")) { const d = JSON.parse(s); match = d.match; live = d.live; document.getElementById('setup-screen').style.display = 'none'; document.getElementById('scoring-screen').style.display = 'grid'; recalc(); } };
+
+        // PWA Service Worker Registration & Update Notification
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').then(reg => {
+                    console.log('Service Worker registered!');
+                    
+                    // Listen for updates from the server
+                    reg.addEventListener('updatefound', () => {
+                        const newWorker = reg.installing;
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                // A new version was found! Alert the user.
+                                if (confirm("A new version of Pumas Scorer Pro is available! Reload now to apply the update?")) {
+                                    window.location.reload();
+                                }
+                            }
+                        });
+                    });
+                }).catch(err => console.log('Service worker not registered:', err));
+                
+                // If the service worker forces a takeover, reload the page to prevent glitches
+                let refreshing;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (refreshing) return;
+                    refreshing = true;
+                    window.location.reload();
+                });
+            });
+        }
+        function hardResetApp() {
+            if(confirm("This will force the app to check for updates and clear the offline cache. (Your current saved match will NOT be deleted). Continue?")) {
+                // 1. Unregister all service workers
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                        for(let registration of registrations) {
+                            registration.unregister();
+                        }
+                    });
+                }
+                // 2. Delete all caches
+                caches.keys().then((keyList) => {
+                    return Promise.all(keyList.map((key) => {
+                        return caches.delete(key);
+                    }));
+                }).then(() => {
+                    // 3. Force reload from the server
+                    window.location.href = window.location.href.split('?')[0] + '?v=' + new Date().getTime();
+                });
+            }
+        }
     </script>
 </body>
 </html>
