@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Walkerville Pumas Scorer Pro v3.88</title>
+    <title>Pumas Scorer Pro v3.88</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#1a73e8">
@@ -129,13 +129,47 @@
         .collapsible { background-color: #f1f1f1; cursor: pointer; padding: 12px; width: 100%; border: none; text-align: left; outline: none; font-size: 1rem; border-radius: 8px; margin-bottom: 5px; font-weight: bold; }
         .active-coll, .collapsible:hover { background-color: #ccc; }
         .coll-content { padding: 0 10px; display: block; overflow: hidden; background-color: white; border-radius: 0 0 8px 8px; transition: max-height 0.2s ease-out; }
+
+        .step-indicator { display: flex; align-items: center; justify-content: center; gap: 0; margin-bottom: 20px; }
+        .step { display: flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; background: #eee; color: #999; }
+        .step.completed { background: #e8f5e9; color: #2e7d32; }
+        .step.active { background: #e3f2fd; color: #1a73e8; }
+        .step-connector { width: 24px; height: 2px; background: #ccc; margin: 0 4px; }
+
+        .format-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+        .format-card { border: 2px solid #ddd; border-radius: 12px; padding: 12px; cursor: pointer; text-align: center; transition: all 0.15s; background: white; user-select: none; }
+        .format-card:hover { border-color: #1a73e8; }
+        .format-card.selected { border-color: #1a73e8; background: #e8f0fe; }
+        .format-card-header { font-size: 1rem; font-weight: bold; margin-bottom: 6px; }
+        .format-card-details { font-size: 0.78rem; color: #666; display: flex; flex-direction: column; gap: 2px; }
+
+        .rules-summary { background: #f8f9fa; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 0.82rem; }
+        .rules-summary h4 { margin: 0 0 4px 0; font-size: 0.85rem; }
+        .limit-grid { display: flex; flex-wrap: wrap; gap: 3px 8px; margin-bottom: 4px; }
+        .limit-item { padding: 2px 6px; border-radius: 4px; background: #eee; font-size: 0.78rem; }
+        .limit-item.active-limit { background: #1a73e8; color: white; }
+
+        .btn-start { background: #2e7d32; color: white; border: none; padding: 16px; border-radius: 12px; font-size: 1.1rem; font-weight: bold; cursor: pointer; width: 100%; transition: background 0.15s; }
+        .btn-start:active { background: #1b5e20; }
+
+        .format-badge { display: inline-block; font-size: 0.65rem; padding: 2px 8px; border-radius: 10px; font-weight: bold; margin-left: 8px; vertical-align: middle; }
+        .format-badge.oneday { background: #e3f2fd; color: #1a73e8; }
+        .format-badge.twoday { background: #fff3e0; color: #e65100; }
     </style>
 </head>
 <body>
     <div id="app" class="main-container">
         <div id="setup-screen" class="card setup-layout">
-            <h2 style="color:var(--primary); text-align:center;">Walkerville Pumas Scorer Pro</h2>
+            <h2 style="color:var(--primary); text-align:center;">Pumas Scorer Pro</h2>
             <div id="innings-notice" style="background:#e3f2fd; padding:10px; border-radius:8px; margin-bottom:15px; display:none;"></div>
+
+            <div class="step-indicator">
+                <div class="step completed" id="step-1"><span>1</span> Teams</div>
+                <div class="step-connector"></div>
+                <div class="step active" id="step-2"><span>2</span> Format</div>
+                <div class="step-connector"></div>
+                <div class="step" id="step-3"><span>3</span> Start</div>
+            </div>
             
             <p style="font-size:0.85rem; color:#d93025; text-align:center; margin-bottom:15px;">
                 <em>Note: If two players have the same name, add an initial (e.g. Devam P, Devam K) so stats don't overlap!</em>
@@ -156,11 +190,42 @@
                     <p id="c2" style="font-size:0.8rem; color:#666;">0 Players</p>
                 </div>
             </div>
-            <div class="config-row" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px;">
-                <div><label>Max Overs</label><input type="number" id="match-overs" value="28"></div>
-                <div><label>Stage</label><input type="text" id="innings-display" value="1st Innings" readonly></div>
+
+            <div class="format-cards">
+                <div class="format-card selected" data-format="oneday" onclick="selectFormat('oneday')">
+                    <div class="format-card-header">🏏 One-Day</div>
+                    <div class="format-card-details">
+                        <span>28 overs per side</span>
+                        <span>Bat limit: <strong id="fd-bat-limit-od">15</strong> balls</span>
+                        <span>Bowl: min <strong>2</strong>, max <strong>4</strong> overs</span>
+                    </div>
+                </div>
+                <div class="format-card" data-format="twoday" onclick="selectFormat('twoday')">
+                    <div class="format-card-header">🏏 Two-Day</div>
+                    <div class="format-card-details">
+                        <span>50 overs per side</span>
+                        <span>Bat limit: <strong id="fd-bat-limit-td">27</strong> balls</span>
+                        <span>Bowl: min <strong>3</strong>, max <strong>6</strong> overs</span>
+                    </div>
+                </div>
             </div>
-            <button class="btn-primary" onclick="openPreMatchModal(false)" style="width:100%">Start Innings</button>
+
+            <div id="format-rules-summary" class="rules-summary">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h4 style="margin:0;">Player Limits</h4>
+                    <span id="rules-format-label" style="font-size:0.78rem; color:#1a73e8; font-weight:bold;">ONE-DAY</span>
+                </div>
+                <div class="limit-grid" id="bat-limit-grid"></div>
+                <p id="bowl-restrict-summary" style="margin:4px 0 0 0; font-size:0.78rem; color:#555;">All players must bowl min 2, max 4 overs</p>
+            </div>
+
+            <input type="hidden" id="match-format" value="oneday">
+            <input type="hidden" id="match-overs" value="28">
+            <input type="hidden" id="innings-display" value="1st Innings">
+
+            <button class="btn-start" onclick="openPreMatchModal(false)">
+                ▶ Start <span id="start-match-label">One-Day</span> Match
+            </button>
             <input type="file" id="import-file" style="display:none" onchange="importState(event)">
             <button onclick="document.getElementById('import-file').click()" class="btn-secondary" style="width:100%; margin-top:10px;">📂 Import Save</button>
             <button onclick="hardResetApp()" style="width:100%; margin-top:20px; background:#f44336; color:white; border:none; padding:10px; border-radius:8px; cursor:pointer;">🔄 Force App Update (Clear Cache)</button>
@@ -169,7 +234,7 @@
         <div id="scoring-screen" class="scoring-grid" style="display:none;">
             <div class="left-col">
                 <header class="scorecard-header card">
-                    <h1 id="total-display">0 / 0</h1>
+                    <h1 id="total-display">0 / 0 <span id="format-badge" class="format-badge oneday">One-Day</span></h1>
                     <div class="header-details">
                         <p>Ov: <span id="overs-display">0.0</span></p>
                         <p>Bowl: <strong id="cur-bowler-display" class="editable" onclick="openManualSwap('bowler')">--</strong></p>
@@ -239,7 +304,7 @@
                 </div>
 
                 <div class="card">
-                    <table id="batter-table"><thead><tr><th>Name</th><th>R</th><th>B</th><th>4s</th><th>Status</th></tr></thead><tbody></tbody></table>
+                    <table id="batter-table"><thead><tr><th>Name</th><th>R</th><th>B</th><th>4s</th><th>Dots</th><th>Status</th></tr></thead><tbody></tbody></table>
                     <button onclick="openTeamManager()" class="btn-secondary" style="width:100%; margin-top:10px; font-size:0.8rem; padding:8px;">✏️ Manage Team Names</button>
                     <table id="bowler-table" style="margin-top:20px;"><thead><tr><th>Bowler</th><th>O</th><th>R</th><th>W</th><th>Econ</th></tr></thead><tbody></tbody></table>
                 </div>
@@ -249,6 +314,7 @@
                     <button onclick="openPrintView()" class="btn-primary" style="flex:1">📊 Report</button>
                     <button onclick="saveMatch()" class="btn-save" style="flex:1">Save</button>
                     <button onclick="exportState()" style="flex:1">Export</button>
+                    <button onclick="endMatch()" style="flex:1; background:#d93025; color:white; border:none; padding:10px; border-radius:8px; cursor:pointer;">⏹ End Match</button>
                     <button onclick="resetMatch()" class="btn-danger" style="flex:1">Reset</button>
                 </div>
             </div>
@@ -290,7 +356,7 @@
         <div id="wicket-modal" class="modal"><div class="modal-content">
             <h3>Wicket!</h3>
             <p>Dismissed Player:</p><select id="wkt-who"><option value="striker">Striker (Facing)</option><option value="ns">Non-Striker</option></select>
-            <p>Type:</p><select id="wkt-type"><option value="Bowled">Bowled</option><option value="Caught">Caught</option><option value="LBW">LBW</option><option value="Run Out">Run Out</option><option value="Stumped">Stumped</option></select>
+            <p>Type:</p><select id="wkt-type"><option value="Bowled">Bowled</option><option value="Caught">Caught</option><option value="Caught & Bowled">Caught &amp; Bowled</option><option value="LBW">LBW</option><option value="Run Out">Run Out</option><option value="Stumped">Stumped</option><option value="Hit Wicket">Hit Wicket</option><option value="Hit Ball Twice">Hit Ball Twice</option><option value="Obstructing the Field">Obstructing the Field</option></select>
             <p>Runs Completed (if Run Out):</p><input type="number" id="wkt-runs" value="0" min="0">
             <p>Fielder:</p><select id="wkt-fielder"><option value="">-- None/Bowler --</option></select>
             <div id="wkt-next-bat-container">
@@ -317,9 +383,9 @@
             <button class="btn-secondary" onclick="closeModals()" style="width:100%;">Cancel</button>
         </div></div>
 
-        <div id="edit-history-modal" class="modal"><div class="modal-content"><h3>Edit Event</h3><div id="edit-ball-container"><label>Runs:</label> <input type="number" id="edit-runs"><label>Type:</label><select id="edit-type"><option value="normal">Normal</option><option value="wide">Wide</option><option value="noball">No Ball</option><option value="byes">Byes</option><option value="legbye">Leg Byes</option><option value="wicket">Wicket</option></select><div id="edit-wkt-fields" style="display:none; background:#fee; padding:10px; border-radius:5px; margin-top:5px;"><label>Wicket Type:</label><select id="edit-wkt-type"><option value="Bowled">Bowled</option><option value="Caught">Caught</option><option value="Run Out">Run Out</option><option value="LBW">LBW</option><option value="Stumped">Stumped</option></select><label>Out Player:</label><select id="edit-wkt-out"></select></div><label>Batter:</label><select id="edit-batter"></select><label>Bowler:</label><select id="edit-bowler"></select></div><div id="edit-simple-container" style="display:none; margin-bottom:15px;"><label>Event Type:</label> <strong id="edit-simple-label"></strong><br><br><label>Player Name:</label><select id="edit-simple-name"></select></div><input type="hidden" id="edit-index"><div style="display:flex; flex-direction:column; gap:10px; margin-top:15px;"><button id="btn-save-edit" class="btn-primary" onclick="confirmEditBall()">Save Changes</button><button class="btn-danger" onclick="deleteHistoryEvent()">🗑 Delete This Entry</button><button class="btn-secondary" onclick="closeModals()">Cancel</button></div></div></div>
+        <div id="edit-history-modal" class="modal"><div class="modal-content"><h3>Edit Event</h3><div id="edit-ball-container"><label>Runs:</label> <input type="number" id="edit-runs"><label>Type:</label><select id="edit-type"><option value="normal">Normal</option><option value="wide">Wide</option><option value="noball">No Ball</option><option value="byes">Byes</option><option value="legbye">Leg Byes</option><option value="wicket">Wicket</option></select><div id="edit-wkt-fields" style="display:none; background:#fee; padding:10px; border-radius:5px; margin-top:5px;"><label>Wicket Type:</label><select id="edit-wkt-type"><option value="Bowled">Bowled</option><option value="Caught">Caught</option><option value="Caught & Bowled">Caught &amp; Bowled</option><option value="LBW">LBW</option><option value="Run Out">Run Out</option><option value="Stumped">Stumped</option><option value="Hit Wicket">Hit Wicket</option><option value="Hit Ball Twice">Hit Ball Twice</option><option value="Obstructing the Field">Obstructing the Field</option></select><label>Out Player:</label><select id="edit-wkt-out"></select></div><label>Batter:</label><select id="edit-batter"></select><label>Bowler:</label><select id="edit-bowler"></select></div><div id="edit-simple-container" style="display:none; margin-bottom:15px;"><label>Event Type:</label> <strong id="edit-simple-label"></strong><br><br><label>Player Name:</label><select id="edit-simple-name"></select></div><input type="hidden" id="edit-index"><div style="display:flex; flex-direction:column; gap:10px; margin-top:15px;"><button id="btn-save-edit" class="btn-primary" onclick="confirmEditBall()">Save Changes</button><button class="btn-danger" onclick="deleteHistoryEvent()">🗑 Delete This Entry</button><button class="btn-secondary" onclick="closeModals()">Cancel</button></div></div></div>
         <div id="team-manager-modal" class="modal"><div class="modal-content"><h3>Manage Teams</h3><div class="team-grid" style="grid-template-columns:1fr 1fr;"><div><label>Team 1</label><textarea id="edit-team1-list"></textarea></div><div><label>Team 2</label><textarea id="edit-team2-list"></textarea></div></div><button class="btn-primary" onclick="confirmTeamEdit()" style="width:100%">Save Changes</button><button class="btn-secondary" onclick="closeModals()" style="width:100%; margin-top:10px;">Cancel</button></div></div>
-        <div id="bowler-modal" class="modal"><div class="modal-content"><h3>New Over</h3><p>Select Bowler:</p><select id="sel-bowler"></select><button class="btn-primary" onclick="confirmBowler()" style="width:100%">Start Over</button></div></div>
+        <div id="bowler-modal" class="modal"><div class="modal-content"><h3>New Over</h3><div id="bowler-warnings" style="background:#fff3e0; color:#e65100; padding:10px; border-radius:8px; margin-bottom:10px; font-size:0.85rem; display:none;"></div><p>Select Bowler:</p><select id="sel-bowler"></select><button class="btn-primary" onclick="confirmBowler()" style="width:100%">Start Over</button></div></div>
         
         <div id="retire-modal" class="modal"><div class="modal-content">
             <h3>Retire Batter</h3>
@@ -335,19 +401,65 @@
     </div>
 
     <script>
-        let match = { innings: 1, target: null, t1: [], t2: [], count1: 13, count2: 13, overs: 28, capt1: "", capt2: "", originalOvers: null };
+        let match = { innings: 1, target: null, t1: [], t2: [], count1: 13, count2: 13, overs: 28, capt1: "", capt2: "", originalOvers: null, format: 'oneday' };
         let live = { runs: 0, wkts: 0, ov: 0, balls: 0, striker: "", ns: "", bowler: "", history: [], batters: {}, bowlers: {}, retireLimit: 13, gameOver: false, promptedOvers: [], pendingExtra: null, notifiedEnd: false };
-        const rLimits = { 8: 21, 9: 18, 10: 16, 11: 15, 12: 14, 13: 13 };
+        const oneDayRetireLimits = { 8: 21, 9: 18, 10: 16, 11: 15, 12: 14, 13: 13 };
+        const twoDayRetireLimits = { 8: 37, 9: 33, 10: 30, 11: 27, 12: 25, 13: 23 };
+
+        function updateOversFromFormat() {
+            const format = document.getElementById('match-format').value;
+            document.getElementById('match-overs').value = format === 'twoday' ? 50 : 28;
+        }
+
+        function selectFormat(format) {
+            document.getElementById('match-format').value = format;
+            document.getElementById('match-overs').value = format === 'twoday' ? 50 : 28;
+            document.querySelectorAll('.format-card').forEach(c => c.classList.toggle('selected', c.dataset.format === format));
+            document.getElementById('start-match-label').innerText = format === 'twoday' ? 'Two-Day' : 'One-Day';
+            updateRulesSummary();
+            updateStepIndicator();
+        }
+
+        function updateRulesSummary() {
+            const format = document.getElementById('match-format').value;
+            const isTwoDay = format === 'twoday';
+            const limits = isTwoDay ? twoDayRetireLimits : oneDayRetireLimits;
+            const batCount = document.getElementById('bat-list').value.split('\n').filter(x => x.trim()).length;
+            const grid = document.getElementById('bat-limit-grid');
+            grid.innerHTML = Object.entries(limits).map(([players, balls]) =>
+                `<span class="limit-item${parseInt(players) === batCount ? ' active-limit' : ''}">${players} players: ${balls} balls</span>`
+            ).join('');
+            const minOv = isTwoDay ? 3 : 2;
+            const maxOv = isTwoDay ? 6 : 4;
+            document.getElementById('bowl-restrict-summary').innerText = 'All players must bowl min ' + minOv + ', max ' + maxOv + ' overs';
+            document.getElementById('rules-format-label').innerText = isTwoDay ? 'TWO-DAY' : 'ONE-DAY';
+            document.getElementById('fd-bat-limit-od').innerText = oneDayRetireLimits[batCount] || 13;
+            document.getElementById('fd-bat-limit-td').innerText = twoDayRetireLimits[batCount] || 27;
+        }
+
+        function updateStepIndicator() {
+            const batCount = document.getElementById('bat-list').value.split('\n').filter(x => x.trim()).length;
+            const bowlCount = document.getElementById('bowl-list').value.split('\n').filter(x => x.trim()).length;
+            const s1 = document.getElementById('step-1');
+            const s2 = document.getElementById('step-2');
+            const s3 = document.getElementById('step-3');
+            s1.classList.toggle('completed', batCount >= 2 && bowlCount >= 1);
+            s2.classList.toggle('active', batCount >= 2 && bowlCount >= 1);
+        }
         
         let retiringRole = 'striker'; 
 
         document.getElementById('bat-list').addEventListener('input', () => {
             const n = document.getElementById('bat-list').value.split('\n').filter(x => x.trim()).length;
             document.getElementById('c1').innerText = n + " Players";
+            updateRulesSummary();
+            updateStepIndicator();
         });
         document.getElementById('bowl-list').addEventListener('input', () => {
             const n = document.getElementById('bowl-list').value.split('\n').filter(x => x.trim()).length;
             document.getElementById('c2').innerText = n + " Players";
+            updateRulesSummary();
+            updateStepIndicator();
         });
 
         function swapSetupTeams() {
@@ -396,6 +508,7 @@
                 match.capt1 = document.getElementById('pm-capt-bat').value;
                 match.capt2 = document.getElementById('pm-capt-bowl').value;
                 match.overs = parseInt(document.getElementById('match-overs').value);
+                match.format = document.getElementById('match-format').value;
                 
                 batArr = batArr.filter(n => n !== striker && n !== ns);
                 batArr.unshift(ns); batArr.unshift(striker);
@@ -405,19 +518,21 @@
                 match.count1 = batArr.length;
                 match.count2 = bowlArr.length;
                 live.history = [];
-                live.retireLimit = rLimits[batArr.length] || 13; 
+                const lims = match.format === 'twoday' ? twoDayRetireLimits : oneDayRetireLimits;
+                live.retireLimit = lims[batArr.length] || (match.format === 'twoday' ? 27 : 13); 
             } else {
                  let t2 = match.t2.filter(n => n !== striker && n !== ns);
                  t2.unshift(ns); t2.unshift(striker);
                  match.t2 = t2;
-                 live.retireLimit = rLimits[t2.length] || 13;
+                 const lims = match.format === 'twoday' ? twoDayRetireLimits : oneDayRetireLimits;
+                 live.retireLimit = lims[t2.length] || (match.format === 'twoday' ? 27 : 13);
             }
 
             live.batters = {}; live.gameOver = false; live.notifiedEnd = false;
             let activeBatTeam = isInnings2 ? match.t2 : match.t1;
             let activeBowlTeam = isInnings2 ? match.t1 : match.t2;
 
-            activeBatTeam.forEach((n, i) => live.batters[n] = { name: n, runs: 0, balls: 0, 4:0, status: 'Yet to bat', stint: 1, order: i });
+            activeBatTeam.forEach((n, i) => live.batters[n] = { name: n, runs: 0, balls: 0, 4:0, dots:0, status: 'Yet to bat', stint: 1, returnOv: null, returnBall: 0, order: i });
             
             live.striker = striker; live.ns = ns;
             live.batters[live.striker].status = 'Active'; 
@@ -504,7 +619,7 @@
                 
                 if (!battingTeam || !bowlingTeam) return;
 
-                battingTeam.forEach((n, i) => live.batters[n] = { name: n, runs: 0, balls: 0, 4:0, status: 'Yet to bat', stint: 1, returnLimit: null, order: i });
+                battingTeam.forEach((n, i) => live.batters[n] = { name: n, runs: 0, balls: 0, 4:0, dots:0, status: 'Yet to bat', stint: 1, returnOv: null, returnBall: 0, order: i });
                 bowlingTeam.forEach(n => live.bowlers[n] = { name: n, runs: 0, wkts: 0, balls: 0 });
 
                 let s = battingTeam[0], ns = battingTeam[1];
@@ -541,7 +656,11 @@
                     if (h.event === 'retire') { if (live.batters[h.name]) live.batters[h.name].status = 'Retired'; return; }
                     if (h.event === 'new_bat') { 
                         if (live.batters[h.name]) {
-                            if (live.batters[h.name].status === 'Retired') { live.batters[h.name].stint++; live.batters[h.name].returnLimit = (live.batters[h.name].stint === 2) ? live.ov + 5 : null; }
+                            if (live.batters[h.name].status === 'Retired') {
+                                live.batters[h.name].stint++;
+                                live.batters[h.name].returnOv = live.ov;
+                                live.batters[h.name].returnBall = live.balls;
+                            }
                             live.batters[h.name].status = 'Active';
                         }
                         if (live.batters[ns] && (live.batters[ns].status === 'Out' || live.batters[ns].status === 'Retired')) { ns = h.name; } else { s = h.name; }
@@ -558,12 +677,18 @@
                     }
 
                     let isLast = (live.ov === match.overs - 1);
-                    if (!live.batters[h.batter]) live.batters[h.batter] = { name: h.batter, runs: 0, balls: 0, 4:0, status: 'Active', stint: 1, returnLimit: null, order: 99 };
+                    if (!live.batters[h.batter]) live.batters[h.batter] = { name: h.batter, runs: 0, balls: 0, 4:0, dots:0, status: 'Active', stint: 1, returnOv: null, returnBall: 0, order: 99 };
                     
                     if (live.batters[h.batter]) {
                         if (!isLast) live.batters[h.batter].balls++; else if (h.legal) live.batters[h.batter].balls++;
-                        if (['normal','wicket'].includes(h.type)) live.batters[h.batter].runs += (h.runs || 0);
-                        else if (h.type === 'noball') { let offBat = (h.runs || 0) - 1; if(offBat > 0) live.batters[h.batter].runs += offBat; }
+                        if (['normal','wicket'].includes(h.type)) {
+                            live.batters[h.batter].runs += (h.runs || 0);
+                            if (!h.runs) live.batters[h.batter].dots++;
+                        } else if (h.type === 'noball') {
+                            let offBat = (h.runs || 0) - 1;
+                            if (offBat > 0) live.batters[h.batter].runs += offBat;
+                            else if (offBat === 0) live.batters[h.batter].dots++;
+                        }
                         if (h.runs === 4) live.batters[h.batter][4]++; else if (h.type === 'noball' && h.runs === 5) live.batters[h.batter][4]++;
                     }
 
@@ -636,7 +761,11 @@
                 document.getElementById('total-display').innerText = live.runs + " / " + live.wkts;
                 let dispOv = live.ov; let dispBalls = live.balls;
                 if(live.ov >= match.overs && live.balls === 0) { dispOv = match.overs; dispBalls = 0; }
-                document.getElementById('overs-display').innerText = dispOv + "." + dispBalls;
+                document.getElementById('overs-display').innerText = dispOv + "." + dispBalls + " / " + match.overs;
+                
+                let fmt = match.format || 'oneday';
+                let badge = document.getElementById('format-badge');
+                if (badge) { badge.innerText = fmt === 'twoday' ? 'Two-Day' : 'One-Day'; badge.className = 'format-badge ' + fmt; }
                 
                 let captBat = match.innings === 1 ? match.capt1 : match.capt2;
                 let captBowl = match.innings === 1 ? match.capt2 : match.capt1;
@@ -670,7 +799,7 @@
                 if(live.ns && live.batters[live.ns]) updatePlayerCard('ns', live.batters[live.ns]);
                 
                 if(live.batters && Object.keys(live.batters).length > 0) {
-                    document.querySelector('#batter-table tbody').innerHTML = Object.values(live.batters).map(p => `<tr><td>${p.name}${p.name===captBat?' (C)':''}</td><td>${p.runs}</td><td>${p.balls}</td><td>${p[4] || 0}</td><td>${p.status}</td></tr>`).join('');
+                    document.querySelector('#batter-table tbody').innerHTML = Object.values(live.batters).map(p => `<tr><td>${p.name}${p.name===captBat?' (C)':''}</td><td>${p.runs}</td><td>${p.balls}</td><td>${p[4] || 0}</td><td>${p.dots || 0}</td><td>${p.status}</td></tr>`).join('');
                 }
                 if(live.bowlers && Object.keys(live.bowlers).length > 0) {
                     document.querySelector('#bowler-table tbody').innerHTML = Object.values(live.bowlers).map(b => {
@@ -792,8 +921,17 @@
             document.getElementById(id + '-balls').innerText = p.balls;
             const b = document.getElementById(id + '-badge');
             if(b) {
-                if (p.stint === 2) { const left = p.returnLimit - live.ov; b.innerText = `Return: ${left}ov`; b.className = left <= 0 ? "balls-left-badge alert" : "balls-left-badge"; } 
-                else { const left = live.retireLimit - p.balls; b.innerText = `Limit: ${left}`; b.className = left <= 0 ? "balls-left-badge alert" : "balls-left-badge"; }
+                if (p.stint === 2 && p.returnOv !== null) {
+                    let fullOvers = live.ov - p.returnOv - (p.returnBall > 0 ? 1 : 0);
+                    let left = 4 - fullOvers;
+                    if (left < 0) left = 0;
+                    b.innerText = `Return: +${left}ov`;
+                    b.className = left <= 0 ? "balls-left-badge alert" : "balls-left-badge";
+                } else {
+                    const left = live.retireLimit - p.balls;
+                    b.innerText = `Limit: ${left}`;
+                    b.className = left <= 0 ? "balls-left-badge alert" : "balls-left-badge";
+                }
             }
         }
 
@@ -915,10 +1053,12 @@
         function openPrintView() {
             const i1 = getInningsStats(1);
             const i2 = getInningsStats(2);
+            let inns2Complete = i2.ov >= match.overs || i2.wkts >= match.count2 - 1;
             let resText = "Match In Progress";
-            if (i1.score > i2.score && (i2.ov >= match.overs || i2.wkts >= match.count2 - 1)) resText = `${match.t1[0]}'s Team won by ${i1.score - i2.score} Runs`;
-            else if (i2.score > i1.score) resText = `${match.t2[0]}'s Team won by ${Math.max(1, (match.t2.length - 1) - i2.wkts)} Wickets`;
-            else if (i1.score === i2.score && i2.ov >= match.overs) resText = "Match Tied";
+            if (i1.score > i2.score && inns2Complete) resText = `${match.t1[0]}'s Team won by ${i1.score - i2.score} Runs`;
+            else if (i2.score > i1.score && inns2Complete) resText = `${match.t2[0]}'s Team won by ${Math.max(1, (match.t2.length - 1) - i2.wkts)} Wickets`;
+            else if (i1.score === i2.score && inns2Complete) resText = "Match Tied";
+            else if (match.innings === 2 && !inns2Complete) resText = "Match In Progress (Draw if stopped)";
 
             let maxOver = Math.max(10, i1.runRateData.length, i2.runRateData.length);
             let manhattanHTML = `<div style="display:flex; align-items:flex-end; height:150px; gap:4px; padding-top:20px; border:1px solid #eee; margin-top:20px;">`;
@@ -1142,10 +1282,50 @@
             alert("No recent dismissal found to undo.");
         }
         
-        function openBowlerModal() { const sel = document.getElementById('sel-bowler'); const list = match.innings === 1 ? match.t2 : match.t1; sel.innerHTML = list.map(n => `<option value="${n}" ${n===live.bowler?'selected':''}>${n}</option>`).join(''); document.getElementById('bowler-modal').style.display = 'flex'; }
+        function openBowlerModal() {
+            const sel = document.getElementById('sel-bowler');
+            const list = match.innings === 1 ? match.t2 : match.t1;
+            const isOneDay = match.format === 'oneday';
+            const minOvers = isOneDay ? 2 : 3;
+            const maxOvers = isOneDay ? 4 : 6;
+            const bowlerOvers = {};
+            list.forEach(n => { const b = live.bowlers[n]; bowlerOvers[n] = b ? Math.floor(b.balls / 6) : 0; });
+            let warns = [];
+            let notMin = list.filter(n => bowlerOvers[n] < minOvers);
+            if (notMin.length > 0) warns.push(`All players must bowl ${minOvers} overs. Still need: ${notMin.join(', ')}`);
+            let atMax = list.filter(n => bowlerOvers[n] >= maxOvers);
+            if (atMax.length > 0) warns.push(`Max ${maxOvers} overs reached: ${atMax.join(', ')}`);
+            let wDiv = document.getElementById('bowler-warnings');
+            wDiv.innerText = warns.join('\n');
+            wDiv.style.display = warns.length ? 'block' : 'none';
+            sel.innerHTML = list.map(n => {
+                let ov = bowlerOvers[n];
+                let tag = ov >= maxOvers ? ' ⛔ MAX' : (ov < minOvers ? ` (need ${minOvers - ov})` : '');
+                return `<option value="${n}" ${n===live.bowler?'selected':''}>${n} [${ov} ov]${tag}</option>`;
+            }).join('');
+            document.getElementById('bowler-modal').style.display = 'flex';
+        }
         function confirmBowler() { const newBowler = document.getElementById('sel-bowler').value; live.history.push({ event: 'new_over', name: newBowler, innings: match.innings }); closeModals(); recalc(); }
         
-        function getNextBatters() { return Object.values(live.batters).sort((a,b) => { const score = (s) => { if (s === 'Yet to bat') return 0; if (s === 'Retired') return 1; return 2; }; return score(a.status) - score(b.status) || a.order - b.order; }); }
+        function getNextBatters() {
+            let yetToBat = Object.values(live.batters).filter(p => p.status === 'Yet to bat').sort((a,b) => a.order - b.order);
+            let retired = Object.values(live.batters).filter(p => p.status === 'Retired').sort((a,b) => b.runs - a.runs || a.order - b.order);
+
+            if (yetToBat.length > 0) return yetToBat;
+
+            let allFacedMinimum = Object.values(live.batters).filter(p => p.status === 'Retired').every(p => p.balls >= live.retireLimit);
+            if (!allFacedMinimum && retired.length > 0) return yetToBat;
+
+            if (retired.length > 0) {
+                let hasStint3Retiree = retired.some(p => p.stint >= 2);
+                if (hasStint3Retiree) {
+                    let hasUnfinishedRetirees = retired.some(p => p.stint < 2);
+                    if (hasUnfinishedRetirees) return retired.filter(p => p.stint < 2).sort((a,b) => b.runs - a.runs || a.order - b.order);
+                }
+                return retired;
+            }
+            return [];
+        }
         
         function openNextBatterModal() { 
             const sel = document.getElementById('sel-next-bat-fix'); 
@@ -1252,7 +1432,24 @@
             openRetireModal(role);
         }
 
-        function checkRetire(b) { if (!b || b.status !== 'Active') return; const active = Object.values(live.batters).filter(p => p.status === 'Active' || p.status === 'Yet to bat').length; if (active <= 2 || !b || b.balls === 0) return; if (b.stint === 1 && b.balls >= live.retireLimit) { setTimeout(() => { alert(b.name + " reached limit. Retire?"); }, 500); } if (b.stint === 2 && b.returnLimit !== null && live.ov >= b.returnLimit && live.balls === 0) { setTimeout(() => { alert(b.name + " return stint done. Retire?"); }, 500); } }
+        function checkRetire(b) {
+            if (!b || b.status !== 'Active') return;
+            const active = Object.values(live.batters).filter(p => p.status === 'Active' || p.status === 'Yet to bat').length;
+            if (active <= 2 || !b || b.balls === 0) return;
+            if (b.stint === 1 && b.balls >= live.retireLimit) {
+                setTimeout(() => { alert(b.name + " reached limit (" + b.balls + " balls). Retire?"); }, 500);
+            }
+            if (b.stint === 2 && b.returnOv !== null) {
+                let fullOvers = live.ov - b.returnOv - (b.returnBall > 0 ? 1 : 0);
+                if (fullOvers >= 4) {
+                    if (match.format === 'twoday') {
+                        setTimeout(() => { alert(b.name + " return stint minimum (4 ov) met. May retire at coach's discretion."); }, 500);
+                    } else {
+                        setTimeout(() => { alert(b.name + " return stint limit (4 ov) reached. Must retire!"); }, 500);
+                    }
+                }
+            }
+        }
         function manualSwapStrike() { live.history.push({ event: 'swap', innings: match.innings }); closeModals(); recalc(); }
         function undo() { live.history.pop(); recalc(); }
         function closeModals() { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
@@ -1308,11 +1505,12 @@
         }
 
         function exportState() { const blob = new Blob([JSON.stringify({match, live})], {type: 'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'match.json'; a.click(); }
+        function endMatch() { if (confirm("End the match now? This will show the final report.")) { live.gameOver = true; saveToMemory(); setTimeout(openPrintView, 100); } }
         function importState(e) { const reader = new FileReader(); reader.onload = (ev) => { const d = JSON.parse(ev.target.result); match = d.match; live = d.live; document.getElementById('setup-screen').style.display='none'; document.getElementById('scoring-screen').style.display='grid'; recalc(); }; reader.readAsText(e.target.files[0]); }
         function resetMatch() { if (confirm("Wipe?")) { localStorage.removeItem('pumas_save'); location.reload(); } }
         function saveMatch() { localStorage.setItem('pumas_save', JSON.stringify({ match, live })); alert("Match Saved Successfully!"); }
         function saveToMemory() { localStorage.setItem('pumas_save', JSON.stringify({ match, live })); const ind = document.getElementById('save-indicator'); ind.style.opacity = 1; setTimeout(() => ind.style.opacity = 0, 2000); }
-        window.onload = () => { const s = localStorage.getItem('pumas_save'); if (s && confirm("Resume Match?")) { const d = JSON.parse(s); match = d.match; live = d.live; document.getElementById('setup-screen').style.display = 'none'; document.getElementById('scoring-screen').style.display = 'grid'; recalc(); } };
+        window.onload = () => { const s = localStorage.getItem('pumas_save'); if (s && confirm("Resume Match?")) { const d = JSON.parse(s); match = d.match; live = d.live; document.getElementById('setup-screen').style.display = 'none'; document.getElementById('scoring-screen').style.display = 'grid'; recalc(); } updateRulesSummary(); updateStepIndicator(); };
 
         // PWA Service Worker Registration & Update Notification
         if ('serviceWorker' in navigator) {
